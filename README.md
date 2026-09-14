@@ -1,6 +1,6 @@
-# 🕒 StampKini — Professional Attendance System
+# 🕒 Professional Attendance System
 
-StampKini is a high-integrity attendance tracking solution designed for modern offices. It combines the agility of a web-based interface with the security of native Android capabilities to ensure that attendance is recorded accurately, honestly, and efficiently.
+This is a high-integrity attendance tracking solution designed for modern offices. It combines the agility of a web-based interface with the security of native Android capabilities to ensure that attendance is recorded accurately, honestly, and efficiently.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Next.js](https://img.shields.io/badge/Next.js-14-black)
@@ -29,7 +29,7 @@ StampKini is a high-integrity attendance tracking solution designed for modern o
 
 ## 🛠 Technical Architecture
 
-StampKini leverages a modern "Web-to-Native" bridge to provide a seamless experience:
+The system leverages a modern "Web-to-Native" bridge to provide a seamless experience:
 
 - **Frontend**: [Next.js 14](https://nextjs.org/) (App Router) + [Tailwind CSS](https://tailwindcss.com/) + [TypeScript](https://www.typescriptlang.org/).
 - **Native Bridge**: [Capacitor](https://capacitorjs.com/) used to wrap the web app into an Android APK.
