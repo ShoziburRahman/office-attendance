@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Stamp Kini</string>
+    <string name="title_activity_main">Stamp Kini</string>
+    <string name="package_name">com.shozibur.stampkini</string>
+    <string name="custom_url_scheme">com.shozibur.stampkini</string>
+</resources>

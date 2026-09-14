@@ -1,0 +1,205 @@
+import { createClient } from "@/lib/supabase/server";
+import { Card, CardBody, CardHeader } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
+import Link from "next/link";
+import { calculateNextWeeklyOff } from "@/lib/utils/weekly-off";
+import { EmployeeGroupedList } from "@/components/admin/EmployeeGroupedList";
+
+const DAYS = [
+  { value: "0", label: "Sunday" },
+  { value: "1", label: "Monday" },
+  { value: "2", label: "Tuesday" },
+  { value: "3", label: "Wednesday" },
+  { value: "4", label: "Thursday" },
+  { value: "5", label: "Friday" },
+  { value: "6", label: "Saturday" },
+];
+
+export default async function WeeklyOffPage() {
+  const supabase = await createClient();
+
+  // 1. Get current office date
+  const { data: settings } = await supabase
+    .from("office_settings")
+    .select("office_timezone")
+    .single();
+
+  const timezone = (settings as any)?.office_timezone || "Asia/Dhaka";
+  const currentOfficeDate = new Date().toLocaleDateString("en-CA", { timeZone: timezone });
+
+  const { data: offSchedules, error } = await supabase
+    .from("weekly_off_schedules")
+    .select(`
+      *,
+      employee:employees!weekly_off_schedules_employee_id_fkey(
+        *,
+        profile:profiles!employees_id_fkey(*)
+      )
+    `)
+    .order("effective_from", { ascending: false })
+    .returns<any[]>();
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <p className="text-status-late">Error loading weekly off schedules: {error.message}</p>
+      </div>
+    );
+  }
+
+  // Grouping logic
+  const groupedData: Record<string, any> = {};
+  offSchedules?.forEach(off => {
+    const empId = off.employee.id;
+    if (!groupedData[empId]) {
+      groupedData[empId] = {
+        employeeId: empId,
+        employeeName: off.employee.profile.full_name,
+        records: [],
+        activeRecord: null
+      };
+    }
+    groupedData[empId].records.push(off);
+  });
+
+  const getStatus = (off: any, nextOffId: string | undefined) => {
+    if (off.id === nextOffId) return { label: "Active", tone: "present" as any };
+    if (currentOfficeDate < off.effective_from) return { label: "Future", tone: "neutral" as any };
+    return { label: "Expired", tone: "neutral" as any };
+  };
+
+  // Process each group: determine active record and sort
+  Object.keys(groupedData).forEach(empId => {
+    const group = groupedData[empId];
+
+    const empSchedules = group.records.map((s: any) => ({
+      id: s.id,
+      day_of_week: s.day_of_week,
+      effective_from: s.effective_from,
+      effective_until: s.effective_until
+    }));
+
+    const nextOff = calculateNextWeeklyOff(currentOfficeDate, empSchedules);
+    const activeId = nextOff?.scheduleId;
+    group.activeRecord = group.records.find((r: any) => r.id === activeId) || null;
+
+    const priority: Record<string, number> = { "Active": 1, "Future": 2, "Expired": 3 };
+    group.records.sort((a: any, b: any) => {
+      const statusA = getStatus(a, activeId).label;
+      const statusB = getStatus(b, activeId).label;
+      if (statusA !== statusB) {
+        return (priority[statusA] || 99) - (priority[statusB] || 99);
+      }
+      return b.effective_from.localeCompare(a.effective_from);
+    });
+  });
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-lg font-semibold text-ink-900">Weekly Off Management</h1>
+          <p className="mt-1 text-sm text-ink-400">Global view of employee off-day configurations</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* Next Weekly Offs Summary */}
+        <div className="lg:col-span-1 space-y-6">
+          <Card>
+            <CardHeader>
+              <p className="text-sm font-medium text-ink-900">Next Weekly Offs</p>
+            </CardHeader>
+            <CardBody className="space-y-4">
+              {offSchedules?.length === 0 ? (
+                <p className="text-sm text-ink-400 italic">No schedules configured.</p>
+              ) : (
+                <div className="space-y-4">
+                  {Object.values(groupedData).map((group: any) => {
+                    const empSchedules = group.records.map((s: any) => ({
+                      id: s.id,
+                      day_of_week: s.day_of_week,
+                      effective_from: s.effective_from,
+                      effective_until: s.effective_until
+                    }));
+                    const nextOff = calculateNextWeeklyOff(currentOfficeDate, empSchedules);
+                    return (
+                      <div key={group.employeeId} className="flex items-center justify-between p-2 rounded-lg bg-ink-50 border border-ink-100">
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium text-ink-900 truncate">
+                            {group.employeeName}
+                          </p>
+                          <p className="text-[10px] text-ink-400">
+                            {nextOff ? `${nextOff.dayLabel}, ${nextOff.dateFormatted}` : "No upcoming off-day"}
+                          </p>
+                        </div>
+                        <Badge tone="neutral" className="text-[10px] py-0 px-2">
+                          {nextOff ? nextOff.dayLabel : "N/A"}
+                        </Badge>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardBody>
+          </Card>
+        </div>
+
+        {/* Main History Table */}
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <p className="text-sm font-medium text-ink-900">All Weekly Off Records</p>
+          </CardHeader>
+          <CardBody>
+            <EmployeeGroupedList
+              groupedData={groupedData}
+              renderHeaderSummary={(active) => {
+                if (!active) return <span className="text-ink-400 italic">No active off-day</span>;
+                const dayLabel = DAYS.find(d => d.value === String(active.day_of_week))?.label || "Unknown";
+                return (
+                  <span className="flex items-center gap-2">
+                    <Badge tone="present" className="text-[10px] px-1 py-0">Active</Badge>
+                    {dayLabel}
+                  </span>
+                );
+              }}
+              renderTableHeaders={() => (
+                <>
+                  <th className="px-3 py-2 font-medium">Off-Day</th>
+                  <th className="px-3 py-2 font-medium">Period</th>
+                  <th className="px-3 py-2 font-medium">Status</th>
+                  <th className="px-3 py-2 font-medium">Action</th>
+                </>
+              )}
+              renderTableRow={(off, idx) => {
+                const activeId = groupedData[off.employee.id].activeRecord?.id;
+                const status = getStatus(off, activeId);
+                return (
+                  <>
+                    <td className="px-3 py-2">
+                      {DAYS.find(d => d.value === String(off.day_of_week))?.label || `Day ${off.day_of_week}`}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      {off.effective_from} {off.effective_until ? ` → ${off.effective_until}` : " → Present"}
+                    </td>
+                    <td className="px-3 py-2">
+                      <Badge tone={status.tone}>{status.label}</Badge>
+                    </td>
+                    <td className="px-3 py-2">
+                      <Link
+                        href={`/admin/employees/${off.employee.id}`}
+                        className="text-xs text-teal-600 hover:underline"
+                      >
+                        Edit
+                      </Link>
+                    </td>
+                  </>
+                );
+              }}
+            />
+          </CardBody>
+        </Card>
+      </div>
+    </div>
+  );
+}
