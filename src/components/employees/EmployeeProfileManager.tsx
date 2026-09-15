@@ -7,6 +7,8 @@ import { EmployeeForm } from "./EmployeeForm";
 import { EmployeeScheduleSection } from "./EmployeeScheduleSection";
 import { EmployeeWeeklyOffSection } from "./EmployeeWeeklyOffSection";
 import { EmployeeLeaveSection } from "./EmployeeLeaveSection";
+import { EmployeeDeviceSection } from "./EmployeeDeviceSection";
+import { ReportDownloadModal } from "@/components/admin/ReportDownloadModal";
 import type {
   EmployeeActionState,
   ScheduleActionState,
@@ -56,6 +58,7 @@ export function EmployeeProfileManager({
   initialLeaveActionState,
 }: EmployeeProfileManagerProps) {
   const [view, setView] = useState<"PROFILE" | "EDIT">("PROFILE");
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
   const today = new Date().toISOString().slice(0, 10);
 
@@ -65,13 +68,24 @@ export function EmployeeProfileManager({
         <a href="/admin/employees" className="text-xs text-teal-600 hover:underline">
           ← Back to Employees
         </a>
-        <Button
-          variant={view === "EDIT" ? "primary" : "secondary"}
-          size="sm"
-          onClick={() => setView(view === "PROFILE" ? "EDIT" : "PROFILE")}
-        >
-          {view === "PROFILE" ? "Edit Profile" : "View Profile"}
-        </Button>
+        <div className="flex gap-2">
+          {view === "PROFILE" && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setIsReportModalOpen(true)}
+            >
+              Download History
+            </Button>
+          )}
+          <Button
+            variant={view === "EDIT" ? "primary" : "secondary"}
+            size="sm"
+            onClick={() => setView(view === "PROFILE" ? "EDIT" : "PROFILE")}
+          >
+            {view === "PROFILE" ? "Edit Profile" : "View Profile"}
+          </Button>
+        </div>
       </div>
 
       {view === "PROFILE" ? (
@@ -121,9 +135,20 @@ export function EmployeeProfileManager({
               leaves={leaves}
               employeeId={employee.id}
             />
+
+            <EmployeeDeviceSection
+              employeeId={employee.id}
+            />
           </div>
         </div>
       )}
+
+      <ReportDownloadModal
+        isOpen={isReportModalOpen}
+        onClose={() => setIsReportModalOpen(false)}
+        employeeId={employee.id}
+        employeeName={employee.profile.full_name}
+      />
     </div>
   );
 }

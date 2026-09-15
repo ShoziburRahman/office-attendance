@@ -23,19 +23,31 @@ export interface CurrentUser {
 export async function getCurrentUser(): Promise<CurrentUser | null> {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  console.log("[getCurrentUser] Fetching auth user...");
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-  if (!user) return null;
+  if (authError || !user) {
+    console.log(`[getCurrentUser] Auth user not found or error: ${authError?.message || "No user"}`);
+    return null;
+  }
+  console.log(`[getCurrentUser] Auth user found: ${user.id}`);
 
+  console.log(`[getCurrentUser] Fetching profile for ${user.id}...`);
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
     .select("*")
     .eq("id", user.id)
-    .single();
+    .single() as any;
 
-  if (profileError || !profile) return null;
+  if (profileError) {
+    console.log(`[getCurrentUser] Profile error for ${user.id}: ${profileError.message}`);
+    return null;
+  }
+  if (!profile) {
+    console.log(`[getCurrentUser] Profile not found for ${user.id}`);
+    return null;
+  }
+  console.log(`[getCurrentUser] Profile found: ${profile.role}`);
 
   const { data: employee } = await supabase
     .from("employees")

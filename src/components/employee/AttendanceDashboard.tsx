@@ -9,10 +9,9 @@ import { Dialog } from "@/components/ui/Dialog";
 import Link from "next/link";
 import { getCurrentLocation } from "@/lib/native/location";
 import { getWifiInfo, verifyWifi } from "@/lib/native/wifi";
-import { checkIn, checkOut, requestAdditionalSession, requestWfh } from "@/app/employee/actions";
-import { QRScanner } from "./QRScanner";
-import type { AttendanceRow as Attendance } from "@/types/database";
+import { checkIn, checkOut, requestAdditionalSession, requestWfh, getBiometricChallenge, checkDeviceStatus } from "@/app/employee/actions";
 import { format, addMinutes } from "date-fns";
+import type { AttendanceRow as Attendance } from "@/types/database";
 import { createClient } from "@/lib/supabase/client";
 
 type AppState = "IDLE" | "VERIFYING" | "CHECKING_IN" | "ACTIVE" | "CHECKING_OUT" | "ADDITIONAL_REQUIRED" | "WFH_APPROVAL_REQUIRED" | "ERROR";
@@ -29,9 +28,6 @@ export function AttendanceDashboard({ initialSessions }: AttendanceDashboardProp
   );
   const [error, setError] = useState<string | null>(null);
   const [selectedType, setSelectedType] = useState<AttendanceType | null>(null);
-  const [qrToken, setQrToken] = useState("");
-  const [outQrToken, setOutQrToken] = useState("");
-  const [showScanner, setShowScanner] = useState(false);
   const [additionalReason, setAdditionalReason] = useState("");
   const [wfhReason, setWfhReason] = useState("");
 
@@ -39,9 +35,10 @@ export function AttendanceDashboard({ initialSessions }: AttendanceDashboardProp
   const [currentTime, setCurrentTime] = useState(new Date());
   const [lockError, setLockError] = useState<{ message: string; time: string } | null>(null);
   const [minMinutes, setMinMinutes] = useState<number>(240); // Default 4 hours
+  const [biometricChallenge, setBiometricChallenge] = useState<{ challenge: string; expiresAt: string } | null>(null);
+  const [biometricSignature, setBiometricSignature] = useState<string | null>(null);
   const [verification, setVerification] = useState({
     wifi: false,
-    qr: false,
     location: false,
     accuracy: 0,
     distance: 0,
@@ -80,28 +77,28 @@ export function AttendanceDashboard({ initialSessions }: AttendanceDashboardProp
 
   async function startVerification() {
     if (!selectedType) return;
-    if (selectedType === "OFFICE" && !qrToken) return;
 
     setState("VERIFYING");
     setError(null);
 
     try {
+      // 1. Device Status Check
+      const deviceStatus = await checkDeviceStatus();
+      if (deviceStatus.status !== "REGISTERED") {
+        setError(`Device not registered. Status: ${deviceStatus.status}. Please contact your administrator.`);
+        setState("IDLE");
+        return;
+      }
+
       const wifiInfo = await getWifiInfo();
       const loc = await getCurrentLocation();
 
       setVerification({
         wifi: !!wifiInfo.ssid,
-        qr: selectedType === "OFFICE" ? !!qrToken : true,
         location: true,
         accuracy: loc.accuracy,
         distance: 0,
       });
-
-      if (selectedType === "OFFICE" && !qrToken) {
-        setError("Please scan the office QR code.");
-        setState("IDLE");
-        return;
-      }
 
       setShowConfirm(true);
       setState("IDLE");
@@ -119,14 +116,29 @@ export function AttendanceDashboard({ initialSessions }: AttendanceDashboardProp
 
     let loc;
     try {
+      // 1. GPS & Wifi
       loc = await getCurrentLocation();
       const wifiInfo = await getWifiInfo();
+
+      // 2. Biometric Challenge-Response
+      const { challenge, challengeId, expiresAt } = await getBiometricChallenge("CHECK_IN");
+
+      // Call native biometric sign
+      const biometricResult = await (window as any).AndroidBiometric.signChallenge(challenge);
+      const resultParsed = JSON.parse(biometricResult);
+
+      if (resultParsed.error) {
+        throw new Error(resultParsed.error);
+      }
+
+      const signature = resultParsed.signature;
 
       const result = await checkIn({
         type: selectedType,
         wifiSsid: wifiInfo.ssid,
         wifiBssid: wifiInfo.bssid,
-        qrToken: selectedType === "OFFICE" ? qrToken : undefined,
+        biometricSignature: signature,
+        challengeId: challengeId,
         latitude: loc.lat,
         longitude: loc.lon,
         locationAccuracy: loc.accuracy,
@@ -169,14 +181,29 @@ export function AttendanceDashboard({ initialSessions }: AttendanceDashboardProp
     setLockError(null);
 
     try {
+      // 1. GPS & Wifi
       const loc = await getCurrentLocation();
       const wifiInfo = await getWifiInfo();
+
+      // 2. Biometric Challenge-Response
+      const { challenge, challengeId, expiresAt } = await getBiometricChallenge("CHECK_OUT");
+
+      // Call native biometric sign
+      const biometricResult = await (window as any).AndroidBiometric.signChallenge(challenge);
+      const resultParsed = JSON.parse(biometricResult);
+
+      if (resultParsed.error) {
+        throw new Error(resultParsed.error);
+      }
+
+      const signature = resultParsed.signature;
 
       const result = await checkOut({
         attendanceId: activeSession.id,
         wifiSsid: wifiInfo.ssid,
         wifiBssid: wifiInfo.bssid,
-        qrToken: activeSession.attendance_type === "OFFICE" ? outQrToken : undefined,
+        biometricSignature: signature,
+        challengeId: challengeId,
         latitude: loc.lat,
         longitude: loc.lon,
         locationAccuracy: loc.accuracy,
@@ -184,7 +211,6 @@ export function AttendanceDashboard({ initialSessions }: AttendanceDashboardProp
 
       setSessions(prev => prev.map(s => s.id === result.id ? result : s));
       setState(sessions.some(s => s.id !== result.id && s.attendance_state === "CHECKED_IN") ? "ACTIVE" : "IDLE");
-      setOutQrToken("");
     } catch (e: any) {
       const rawError = e?.message || (typeof e === "string" ? e : JSON.stringify(e)) || "";
       const lowerError = rawError.toLowerCase();
@@ -308,45 +334,13 @@ export function AttendanceDashboard({ initialSessions }: AttendanceDashboardProp
                 </div>
               </div>
 
-              {selectedType === "OFFICE" && (
-                <div className="animate-in fade-in slide-in-from-top-2 duration-200 space-y-4">
-                  <div className="flex gap-2">
-                    <Field label="Office QR Token" htmlFor="qrToken" required className="flex-1">
-                      <Input
-                        id="qrToken"
-                        name="qrToken"
-                        placeholder="Scan or enter token"
-                        value={qrToken}
-                        onChange={(e) => setQrToken(e.target.value)}
-                        required
-                      />
-                    </Field>
-                    <Button
-                      variant="secondary"
-                      onClick={() => setShowScanner(true)}
-                      className="h-10"
-                    >
-                      Scan QR
-                    </Button>
-                  </div>
-                </div>
-              )}
-
               <Button
-                disabled={!selectedType || (selectedType === "OFFICE" && !qrToken)}
+                disabled={!selectedType}
                 onClick={startVerification}
                 isLoading={state === "VERIFYING"}
               >
                 Check In
               </Button>
-              <QRScanner
-                isOpen={showScanner}
-                onClose={() => setShowScanner(false)}
-                onScanSuccess={(token) => {
-                  setQrToken(token);
-                  setShowScanner(false);
-                }}
-              />
             </div>
           )}
 
@@ -362,18 +356,6 @@ export function AttendanceDashboard({ initialSessions }: AttendanceDashboardProp
                   </div>
 
                   <div className="w-full border-t border-ink-100 pt-6">
-                    {activeSession.attendance_type === "OFFICE" && (
-                      <Field label="Office QR Token" htmlFor="outQrToken" required className="mb-4">
-                        <Input
-                          id="outQrToken"
-                          name="outQrToken"
-                          placeholder="Scan or enter token to check out"
-                          value={outQrToken}
-                          onChange={(e) => setOutQrToken(e.target.value)}
-                          required
-                        />
-                      </Field>
-                    )}
                     <div className="flex flex-col items-center gap-2">
                       <Button
                         className="w-full"

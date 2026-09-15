@@ -1,5 +1,6 @@
 import { requireUser } from "@/lib/auth/session";
 import { EmployeeProfileView } from "@/components/profile/EmployeeProfileView";
+import { EmployeeDeviceRegistration } from "@/components/employee/EmployeeDeviceRegistration";
 import { calculateAttendanceSummaries } from "@/lib/attendance-utils";
 import { createClient } from "@/lib/supabase/server";
 import { getBusinessDate } from "@/lib/date-utils";
@@ -64,6 +65,7 @@ export default async function EmployeeProfilePage() {
           monthlySummaries={monthlySummaries}
           detailedAttendance={detailedAttendance || []}
         />
+        <EmployeeDeviceRegistration />
       </div>
     );
   } catch (error) {

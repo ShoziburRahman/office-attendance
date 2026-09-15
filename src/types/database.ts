@@ -27,8 +27,35 @@ export type WfhStatus = "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
 
 export type AdditionalAttendanceStatus = "PENDING" | "APPROVED" | "REJECTED";
 
+export interface EmployeeDeviceRow {
+  id: string;
+  employee_id: string;
+  public_key: string;
+  device_name: string;
+  device_model: string;
+  app_version: string;
+  status: "PENDING" | "APPROVED" | "REJECTED" | "REVOKED";
+  registered_at: string;
+  approved_at: string | null;
+  revoked_at: string | null;
+  last_authenticated_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BiometricChallengeRow {
+  id: string;
+  employee_id: string;
+  device_id: string;
+  challenge: string;
+  action: "CHECK_IN" | "CHECK_OUT";
+  expires_at: string;
+  consumed_at: string | null;
+  created_at: string;
+}
+
 export type VerificationMethod =
-  | "WIFI_AND_QR"
+  | "BIOMETRIC"
   | "WFH_APPROVAL"
   | "ADMIN_MANUAL_ENTRY";
 
@@ -123,9 +150,7 @@ export interface AttendanceRow {
   late_minutes: number;
   is_late: boolean;
   check_in_wifi_verified: boolean;
-  check_in_qr_token_id: string | null;
   check_out_wifi_verified: boolean | null;
-  check_out_qr_token_id: string | null;
   wfh_request_id: string | null;
   notes: string | null;
   created_at: string;
@@ -157,7 +182,6 @@ export interface OfficeSettingsRow {
   default_break_minutes: number;
   min_minutes_before_checkout: number;
   max_session_minutes: number;
-  qr_token_ttl_seconds: number;
   office_wifi_ssids: string[];
   office_wifi_bssids: string[];
   created_at: string;
@@ -175,6 +199,34 @@ export interface WfhRequestRow {
   approved_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface SalaryCalculationRow {
+  id: string;
+  employee_id: string;
+  month: number;
+  year: number;
+  basic_salary: number;
+  overtime_hours: number;
+  overtime_rate: number;
+  overtime_amount: number;
+  other_earnings: number;
+  salary_days: number;
+  working_days: number;
+  present_days: number;
+  paid_leave: number;
+  unpaid_leave: number;
+  unpaid_leave_deduction: number;
+  penalty_amount: number;
+  penalty_reason: string | null;
+  other_deductions: number;
+  gross_salary: number;
+  total_deductions: number;
+  net_salary: number;
+  status: "Draft" | "Paid";
+  created_at: string;
+  updated_at: string;
+  updated_by: string | null;
 }
 
 export interface Database {
@@ -224,9 +276,25 @@ export interface Database {
         Row: WfhRequestRow;
         Insert: Partial<WfhRequestRow>;
         Update: Partial<WfhRequestRow>;
-      };
+      },
+      employee_devices: {
+        Row: EmployeeDeviceRow;
+        Insert: Partial<EmployeeDeviceRow>;
+        Update: Partial<EmployeeDeviceRow>;
+      },
+      biometric_challenges: {
+        Row: BiometricChallengeRow;
+        Insert: Partial<BiometricChallengeRow>;
+        Update: Partial<BiometricChallengeRow>;
+      },
+      salary_calculations: {
+        Row: SalaryCalculationRow;
+        Insert: Partial<SalaryCalculationRow>;
+        Update: Partial<SalaryCalculationRow>;
+      },
     };
     Functions: {
+
 
       fn_check_in: {
         Args: {

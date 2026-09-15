@@ -1,11 +1,14 @@
 "use client";
 
+import React, { useState, useEffect } from "react";
 import { useFormState, useFormStatus } from "react-dom";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Field, Input } from "@/components/ui/Field";
+import { Badge } from "@/components/ui/Badge";
 import type { LeaveActionState } from "@/app/admin/employees/state";
 import type { EmployeeLeaveRow } from "@/types/database";
+import { calculatePaidLeaveStatus } from "@/lib/attendance/leave-calculations";
 
 type ActionFn = (prevState: LeaveActionState, formData: FormData) => Promise<LeaveActionState>;
 
@@ -27,12 +30,52 @@ function SubmitButton({ label }: { label: string }) {
 
 export function EmployeeLeaveSection({ action, initialState, leaves, employeeId }: EmployeeLeaveSectionProps) {
   const [state, formAction] = useFormState(action, initialState);
+  const [leaveStatus, setLeaveStatus] = useState<{
+    limit: number;
+    used: number;
+    extra: number;
+    isExceeded: boolean;
+  } | null>(null);
+  const [isLoadingStatus, setIsLoadingStatus] = useState(false);
   const errors = state.fieldErrors ?? {};
+
+  useEffect(() => {
+    async function fetchPaidLeaveStatus() {
+      setIsLoadingStatus(true);
+      try {
+        const currentYear = new Date().getFullYear();
+        const status = await calculatePaidLeaveStatus(employeeId, currentYear);
+        setLeaveStatus(status);
+      } catch (e) {
+        console.error("Failed to fetch paid leave status:", e);
+      } finally {
+        setIsLoadingStatus(false);
+      }
+    }
+    fetchPaidLeaveStatus();
+  }, [employeeId]);
 
   return (
     <Card className="mt-6">
       <CardHeader>
-        <p className="text-sm font-medium text-ink-900">Leave Management</p>
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-medium text-ink-900">Leave Management</p>
+          {leaveStatus && (
+            <div className="flex flex-col items-end">
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-ink-400">Paid Leave:</span>
+                <span className={`font-semibold ${leaveStatus.isExceeded ? "text-status-late" : "text-ink-900"}`}>
+                  {leaveStatus.used} / {leaveStatus.limit} days
+                </span>
+              </div>
+              {leaveStatus.isExceeded && (
+                <p className="text-[10px] text-status-late font-bold uppercase">
+                  Paid leave limit exceeded by {leaveStatus.extra} days
+                </p>
+              )}
+            </div>
+          )}
+        </div>
       </CardHeader>
       <CardBody>
         <div className="mb-8">

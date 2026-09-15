@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { AdminSidebar } from "@/components/layout/AdminSidebar";
 import { getCurrentUser } from "@/lib/auth/session";
+import { ToastProvider } from "@/components/ui/ToastProvider";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
@@ -14,9 +15,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   }
 
   return (
-    <div className="flex min-h-screen bg-ink-50">
-      <AdminSidebar profile={user.profile} />
-      <main className="flex-1 overflow-y-auto p-8">{children}</main>
-    </div>
+    <ToastProvider>
+      <div className="flex min-h-screen bg-ink-50">
+        <AdminSidebar profile={user.profile} />
+        <main className="flex-1 overflow-y-auto p-8">{children}</main>
+      </div>
+    </ToastProvider>
   );
 }

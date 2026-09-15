@@ -6,12 +6,13 @@ import { initials } from "@/lib/utils/format";
 const NAV_ITEMS = [
   { href: "/admin", label: "Dashboard" },
   { href: "/admin/employees", label: "Employees" },
+  { href: "/admin/devices", label: "Device Management" },
   { href: "/admin/attendance", label: "Attendance" },
   { href: "/admin/schedules", label: "Work Schedules" },
   { href: "/admin/weekly-off", label: "Weekly Off" },
   { href: "/admin/leave", label: "Leave Management" },
   { href: "/admin/wfh", label: "WFH Requests" },
-  { href: "/admin/office-qr", label: "Office QR Code" },
+  { href: "/admin/salary", label: "Salary Calculation" },
   { href: "/admin/reports", label: "Reports" },
   { href: "/admin/settings", label: "Settings" },
 ] as const;
