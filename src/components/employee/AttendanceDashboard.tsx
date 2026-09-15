@@ -491,6 +491,33 @@ export function AttendanceDashboard({ initialSessions }: AttendanceDashboardProp
               </Button>
             </div>
           )}
+
+          <Dialog
+            isOpen={showConfirm}
+            onClose={() => setShowConfirm(false)}
+            title="Confirm Check-In"
+          >
+            <div className="text-center space-y-4">
+              <p className="text-sm text-ink-600">Are you sure you want to check in?</p>
+              <div className="flex gap-3">
+                <Button
+                  variant="secondary"
+                  className="flex-1"
+                  onClick={() => setShowConfirm(false)}
+                  disabled={state === "CHECKING_IN"}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  className="flex-1"
+                  onClick={handleCheckIn}
+                  isLoading={state === "CHECKING_IN"}
+                >
+                  Confirm
+                </Button>
+              </div>
+            </div>
+          </Dialog>
         </CardBody>
       </Card>
     </div>

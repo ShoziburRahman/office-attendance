@@ -1,0 +1,10 @@
+# Implementation Plan: Secure Android Biometric Device-Binding for Attendance\n\nReplace the existing QR-code verification system with a biometric-bound, non-exportable key system on Android.\n\n
+## 1. Native Android Implementation\n\nFile: android/app/src/main/java/com/shozibur/stampkini/MainActivity.java\n\n
+- Implement AndroidBiometric JavascriptInterface.\n- Key Generation: Use KeyGenParameterSpec with setUserAuthenticationRequired(true) and setInvalidatedByBiometricEnrollment(true).\n- Biometric Prompt: Use BiometricPrompt for authentication.\n- Methods: generateAndExportPublicKey(), signChallenge(nonce).\n\n
+## 2. Database Schema\n\n- Table employee_devices: id, employee_id (unique), public_key, device_name, status (PENDING, APPROVED, REJECTED), created_at, updated_at.\n- Table biometric_challenges: id, employee_id, nonce, expires_at, created_at.\n\n
+## 3. Server-Side Logic\n\n- getBiometricChallenge(): Generates nonce and stores it in biometric_challenges.\n- verifyBiometricAttendance(): Verifies signature using public key from employee_devices via node:crypto.\n- Modified checkIn/checkOut: Replace qrToken with biometricSignature and challengeId.\n\n
+## 4. Registration Workflow\n\n- Employee: Generate key -> request registration (status PENDING).\n- Admin: View pending requests -> approve/reject.\n\n
+## 5. UI Changes\n\n- AttendanceDashboard.tsx: Replace QR flow with biometric challenge-response flow.\n- EmployeeProfileManager.tsx: Add Security & Device section for admins and employees.\n\n
+## 6. Migration Path\n\n- Phase 1: Schema & Native Code.\n- Phase 2: Registration & Approval.\n- Phase 3: Hybrid support (QR or Biometric).\n- Phase 4: Enforce Biometrics.\n\n
+## 7. Verification\n\n- 26 test cases covering registration, binding, challenges, signatures, biometrics, integrity, and business logic.\n\n
+### Critical Files for Implementation\n- android/app/src/main/java/com/shozibur/stampkini/MainActivity.java\n- src/app/employee/actions.ts\n- src/components/employee/AttendanceDashboard.tsx\n- src/components/employees/EmployeeProfileManager.tsx\n- src/components/profile/EmployeeProfileView.tsx\n
