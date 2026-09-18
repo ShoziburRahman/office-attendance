@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth/session";
 import { buildMonthlyReportData } from "@/lib/reports/report-data-builder";
 import type { SalaryCalculationRow } from "@/types/database";
+export type { SalaryCalculationRow };
 
 export interface SalaryDataPayload {
   employeeId: string;
@@ -99,7 +100,7 @@ export async function loadSalaryData(employeeId: string, month: number, year: nu
   const reportData = await buildMonthlyReportData(employeeId, month, year);
 
   // Convert overtime minutes to hours
-  const overtimeHours = parseFloat((reportData.summary.totalOvertime / 60).toFixed(2));
+  const overtimeHours = parseFloat((reportData.summary.totalOvertimeMinutes / 60).toFixed(2));
 
   const baseline: SalaryDataPayload = {
     employeeId,
@@ -127,31 +128,32 @@ export async function loadSalaryData(employeeId: string, month: number, year: nu
 
   // If saved record exists, it takes precedence over baseline
   if (savedSalary) {
+    const savedSalaryAny = savedSalary as any;
     return {
       saved: true,
-      employeeName: empInfo.profiles.full_name,
+      employeeName: (empInfo as any).profiles.full_name,
       data: {
-        employeeId: savedSalary.employee_id,
-        month: savedSalary.month,
-        year: savedSalary.year,
-        salaryDays: savedSalary.salary_days || salaryDays,
-        basicSalary: savedSalary.basic_salary,
-        overtimeHours: savedSalary.overtime_hours,
-        overtimeRate: savedSalary.overtime_rate,
-        overtimeAmount: savedSalary.overtime_amount,
-        otherEarnings: savedSalary.other_earnings,
-        workingDays: savedSalary.working_days,
-        presentDays: savedSalary.present_days,
-        paidLeave: savedSalary.paid_leave,
-        unpaidLeave: savedSalary.unpaid_leave,
-        unpaidLeaveDeduction: savedSalary.unpaid_leave_deduction,
-        penaltyAmount: savedSalary.penalty_amount,
-        penaltyReason: savedSalary.penalty_reason || "",
-        otherDeductions: savedSalary.other_deductions,
-        grossSalary: savedSalary.gross_salary,
-        totalDeductions: savedSalary.total_deductions,
-        netSalary: savedSalary.net_salary,
-        status: savedSalary.status as "Draft" | "Paid",
+        employeeId: savedSalaryAny.employee_id,
+        month: savedSalaryAny.month,
+        year: savedSalaryAny.year,
+        salaryDays: savedSalaryAny.salary_days || salaryDays,
+        basicSalary: savedSalaryAny.basic_salary,
+        overtimeHours: savedSalaryAny.overtime_hours,
+        overtimeRate: savedSalaryAny.overtime_rate,
+        overtimeAmount: savedSalaryAny.overtime_amount,
+        otherEarnings: savedSalaryAny.other_earnings,
+        workingDays: savedSalaryAny.working_days,
+        presentDays: savedSalaryAny.present_days,
+        paidLeave: savedSalaryAny.paid_leave,
+        unpaidLeave: savedSalaryAny.unpaid_leave,
+        unpaidLeaveDeduction: savedSalaryAny.unpaid_leave_deduction,
+        penaltyAmount: savedSalaryAny.penalty_amount,
+        penaltyReason: savedSalaryAny.penalty_reason || "",
+        otherDeductions: savedSalaryAny.other_deductions,
+        grossSalary: savedSalaryAny.gross_salary,
+        totalDeductions: savedSalaryAny.total_deductions,
+        netSalary: savedSalaryAny.net_salary,
+        status: savedSalaryAny.status as "Draft" | "Paid",
       },
       baseline,
     };
@@ -159,7 +161,7 @@ export async function loadSalaryData(employeeId: string, month: number, year: nu
 
   return {
     saved: false,
-    employeeName: empInfo.profiles.full_name,
+    employeeName: (empInfo as any).profiles.full_name,
     data: baseline,
     baseline,
   };
@@ -173,34 +175,32 @@ export async function saveSalaryCalculation(data: SalaryDataPayload) {
 
   const supabase = await createClient();
 
-  const { error } = await supabase
-    .from("salary_calculations")
-    .upsert({
-      employee_id: data.employeeId,
-      month: data.month,
-      year: data.year,
-      basic_salary: data.basicSalary,
-      overtime_hours: data.overtimeHours,
-      overtime_rate: data.overtimeRate,
-      overtime_amount: data.overtimeAmount,
-      other_earnings: data.otherEarnings,
-      working_days: data.workingDays,
-      present_days: data.presentDays,
-      paid_leave: data.paidLeave,
-      unpaid_leave: data.unpaidLeave,
-      unpaid_leave_deduction: data.unpaidLeaveDeduction,
-      penalty_amount: data.penaltyAmount,
-      penalty_reason: data.penaltyReason,
-      other_deductions: data.otherDeductions,
-      gross_salary: data.grossSalary,
-      total_deductions: data.totalDeductions,
-      net_salary: data.netSalary,
-      status: data.status,
-      updated_by: currentUser.id,
-      updated_at: new Date().toISOString(),
-    }, {
-      onConflict: 'employee_id,month,year'
-    });
+  const { error } = await (supabase.from("salary_calculations") as any).upsert({
+    employee_id: data.employeeId,
+    month: data.month,
+    year: data.year,
+    basic_salary: data.basicSalary,
+    overtime_hours: data.overtimeHours,
+    overtime_rate: data.overtimeRate,
+    overtime_amount: data.overtimeAmount,
+    other_earnings: data.otherEarnings,
+    working_days: data.workingDays,
+    present_days: data.presentDays,
+    paid_leave: data.paidLeave,
+    unpaid_leave: data.unpaidLeave,
+    unpaid_leave_deduction: data.unpaidLeaveDeduction,
+    penalty_amount: data.penaltyAmount,
+    penalty_reason: data.penaltyReason,
+    other_deductions: data.otherDeductions,
+    gross_salary: data.grossSalary,
+    total_deductions: data.totalDeductions,
+    net_salary: data.netSalary,
+    status: data.status,
+    updated_by: currentUser.authId,
+    updated_at: new Date().toISOString(),
+  }, {
+    onConflict: 'employee_id,month,year'
+  });
 
   if (error) {
     throw new Error(`Could not save salary calculation: ${error.message}`);

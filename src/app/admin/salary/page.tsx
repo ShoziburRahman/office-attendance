@@ -77,10 +77,12 @@ export default function SalaryCalculationPage() {
   }
 
   async function handleSelectHistory(record: SalaryCalculationRow) {
+    const salaryDays = new Date(record.year, record.month, 0).getDate();
     setSalaryData({
       employeeId: record.employee_id,
       month: record.month,
       year: record.year,
+      salaryDays,
       basicSalary: record.basic_salary,
       overtimeHours: record.overtime_hours,
       overtimeRate: record.overtime_rate,
