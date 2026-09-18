@@ -6,6 +6,24 @@ import { requireUser } from "@/lib/auth/session";
 import crypto from "crypto";
 import type { AttendanceRow as Attendance, AdditionalAttendanceRequestRow as AdditionalAttendanceRequest } from "@/types/database";
 
+export async function fetchMySessions(): Promise<Attendance[]> {
+  const user = await requireUser();
+  const supabase = await createClient();
+
+  const { data: todayData } = await (supabase as any).rpc("fn_office_today");
+  const today = todayData || new Date().toISOString().slice(0, 10);
+
+  const { data, error } = await supabase
+    .from("attendance")
+    .select("*")
+    .eq("employee_id", user.authId)
+    .eq("attendance_date", today)
+    .order("session_number", { ascending: true });
+
+  if (error) throw error;
+  return data || [];
+}
+
 export interface CheckInParams {
   type: 'OFFICE' | 'WORK_FROM_HOME';
   wifiSsid?: string | null;

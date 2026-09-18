@@ -1,4 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
+import { calculateDailyStatus } from "@/lib/attendance-utils";
+import type { AttendanceRow, EmployeeLeaveRow, WeeklyOffScheduleRow } from "@/types/database";
 
 export interface MonthlyReportData {
   employee: {
@@ -15,6 +17,7 @@ export interface MonthlyReportData {
     totalWorkingDays: number;
     daysWorked: number;
     presentDays: number;
+    absentDays: number;
     paidLeaveDays: number;
     unpaidLeaveDays: number;
     weeklyOffs: number;
@@ -49,12 +52,13 @@ export async function buildMonthlyReportData(employeeId: string, month: number, 
   // 1. Employee Info
   const { data: employee } = await supabase
     .from("employees")
-    .select("employee_code, position, department, profiles(full_name)")
+    .select("employee_code, position, department, joining_date, profiles(full_name)")
     .eq("id", employeeId)
     .single();
 
   if (!employee) throw new Error("Employee not found");
   const employeeData = employee as any;
+  const joiningDate = employeeData.joining_date;
 
   // 2. Attendance Data
   const { data: attendance } = await supabase
@@ -65,7 +69,7 @@ export async function buildMonthlyReportData(employeeId: string, month: number, 
     .lte("attendance_date", endDateStr)
     .order("attendance_date", { ascending: true });
 
-  const attendanceData = (attendance as any[]) || [];
+  const attendanceData = (attendance as AttendanceRow[]) || [];
 
   // 3. Leave Data
   const { data: leaves } = await supabase
@@ -75,7 +79,7 @@ export async function buildMonthlyReportData(employeeId: string, month: number, 
     .gte("leave_date", startDateStr)
     .lte("leave_date", endDateStr);
 
-  const leavesData = (leaves as any[]) || [];
+  const leavesData = (leaves as EmployeeLeaveRow[]) || [];
 
   // 4. Weekly Offs
   const { data: weeklyOffs } = await supabase
@@ -85,7 +89,7 @@ export async function buildMonthlyReportData(employeeId: string, month: number, 
     .lte("effective_from", endDateStr)
     .or(`effective_until.is.null,effective_until.gte.${startDateStr}`);
 
-  const weeklyOffsData = (weeklyOffs as any[]) || [];
+  const weeklyOffsData = (weeklyOffs as WeeklyOffScheduleRow[]) || [];
 
   // 5. WFH Requests
   const { data: wfh } = await supabase
@@ -108,6 +112,7 @@ export async function buildMonthlyReportData(employeeId: string, month: number, 
   let totalWorkingDays = 0;
   let daysWorked = 0;
   let presentDays = 0;
+  let absentDays = 0;
   let paidLeaveDays = 0;
   let unpaidLeaveDays = 0;
   let weeklyOffCount = 0;
@@ -118,63 +123,66 @@ export async function buildMonthlyReportData(employeeId: string, month: number, 
   for (let d = 1; d <= endDate.getDate(); d++) {
     const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     const dateObj = new Date(dateStr);
-    const dayOfWeek = dateObj.getDay(); // 0 = Sunday
 
-    const dayAttendance = attendanceData.find(a => a.attendance_date === dateStr);
-    const dayLeave = leavesData.find(l => l.leave_date === dateStr);
-    const isWeeklyOff = weeklyOffsData.some(wo => wo.day_of_week === dayOfWeek);
+    const statusData = calculateDailyStatus(
+      dateStr,
+      employeeId,
+      attendanceData,
+      leavesData,
+      weeklyOffsData,
+      joiningDate
+    );
+
     const isWfh = wfhData.some(w => w.request_date === dateStr);
 
-    let status = "Absent";
-    let checkIn: string | null = null;
-    let checkOut: string | null = null;
-    let duration: string | null = null;
-    let late = 0;
-    let isLate = false;
-    let overtime = 0;
-
-    if (dayAttendance) {
-      status = dayAttendance.attendance_state === "CHECKED_IN" ? "Active" : "Present";
-      checkIn = dayAttendance.check_in_at ? new Date(dayAttendance.check_in_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
-      checkOut = dayAttendance.check_out_at ? new Date(dayAttendance.check_out_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
-      duration = dayAttendance.working_minutes ? `${dayAttendance.working_minutes}m` : null;
-      late = dayAttendance.late_minutes || 0;
-      isLate = dayAttendance.is_late;
-      overtime = dayAttendance.overtime_minutes || 0;
-
-      daysWorked++;
-      presentDays++;
-      totalLateMinutes += late;
-      totalOvertime += overtime;
-      totalWorkingMinutes += (dayAttendance.working_minutes || 0);
-    } else if (dayLeave) {
-      status = dayLeave.leave_type === "PAID" ? "Paid Leave" : "Unpaid Leave";
-      if (dayLeave.leave_type === "PAID") paidLeaveDays++; else unpaidLeaveDays++;
-    } else if (isWeeklyOff) {
-      status = "Weekly Off";
-      weeklyOffCount++;
-    } else if (isWfh) {
-      status = "WFH (Approved)";
-      // WFH usually counts as present if they actually check in, but if it's just a request:
-      // We treat approved WFH without attendance as a special status.
+    let displayStatus = "";
+    switch (statusData.status) {
+      case 'PRESENT': displayStatus = "Present"; break;
+      case 'MISSING_CHECK_OUT': displayStatus = "Active"; break;
+      case 'PAID_LEAVE': displayStatus = "Paid Leave"; break;
+      case 'UNPAID_LEAVE': displayStatus = "Unpaid Leave"; break;
+      case 'WEEKLY_OFF': displayStatus = "Weekly Off"; break;
+      case 'ABSENT':
+        displayStatus = isWfh ? "WFH (Approved)" : "Absent";
+        break;
     }
 
-    if (!isWeeklyOff && dayLeave?.leave_type !== 'PAID') {
+    const checkIn = statusData.checkIn ? new Date(statusData.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
+    const checkOut = statusData.checkOut ? new Date(statusData.checkOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
+    const duration = statusData.durationMinutes > 0 ? `${statusData.durationMinutes}m` : null;
+
+    if (statusData.status === 'PRESENT' || statusData.status === 'MISSING_CHECK_OUT') {
+      daysWorked++;
+      presentDays++;
+      totalLateMinutes += statusData.lateMinutes;
+      totalOvertime += statusData.overtimeMinutes;
+      totalWorkingMinutes += statusData.durationMinutes;
+    } else if (statusData.status === 'PAID_LEAVE') {
+      paidLeaveDays++;
+    } else if (statusData.status === 'UNPAID_LEAVE') {
+      unpaidLeaveDays++;
+    } else if (statusData.status === 'WEEKLY_OFF') {
+      weeklyOffCount++;
+    } else if (statusData.status === 'ABSENT') {
+      if (!isWfh) absentDays++;
+    }
+
+    if (!statusData.isWeeklyOff && statusData.status !== 'PAID_LEAVE') {
       totalWorkingDays++;
     }
 
     dailyDetails.push({
       date: dateStr,
       day: getDayName(dateStr),
-      status,
+      status: displayStatus,
       checkIn,
       checkOut,
       duration,
-      lateMinutes: late,
-      isLate,
-      overtime,
-      isWeeklyOff,
-      leaveType: dayLeave?.leave_type || null,
+      lateMinutes: statusData.lateMinutes,
+      isLate: statusData.isLate,
+      overtime: statusData.overtimeMinutes,
+      isWeeklyOff: statusData.isWeeklyOff,
+      leaveType: statusData.status === 'PAID_LEAVE' ? 'PAID' : (statusData.status === 'UNPAID_LEAVE' ? 'UNPAID' : null),
       isWfh,
     });
   }
@@ -191,6 +199,7 @@ export async function buildMonthlyReportData(employeeId: string, month: number, 
       totalWorkingDays,
       daysWorked,
       presentDays,
+      absentDays,
       paidLeaveDays,
       unpaidLeaveDays,
       weeklyOffs: weeklyOffCount,

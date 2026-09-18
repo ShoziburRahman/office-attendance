@@ -7,6 +7,7 @@ export interface EmployeeFormInput {
   position: string;
   joiningDate: string;
   allowMultipleSessions: boolean;
+  baseSalary: string;
   avatarFile?: File;
 }
 
@@ -70,6 +71,10 @@ export function validateEmployeeForm(input: EmployeeFormInput): EmployeeFormErro
     errors.joiningDate = "Joining date is required.";
   } else if (Number.isNaN(Date.parse(input.joiningDate))) {
     errors.joiningDate = "Enter a valid date.";
+  }
+
+  if (input.baseSalary && (isNaN(parseFloat(input.baseSalary)) || parseFloat(input.baseSalary) < 0)) {
+    errors.baseSalary = "Base salary must be a positive number.";
   }
 
   return errors;

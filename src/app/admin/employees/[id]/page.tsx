@@ -42,8 +42,8 @@ export default async function EmployeeProfilePage({ params }: EmployeeProfilePag
       initialUser={user}
       initialData={{
         employee,
-        lifetimeSummary: lifetimeRes.data,
-        monthlySummaries: monthlyRes.data,
+        lifetimeSummary: Array.isArray(lifetimeRes.data) ? lifetimeRes.data[0] : lifetimeRes.data,
+        monthlySummaries: monthlyRes.data || [],
         detailedAttendance: attendanceRes.data || [],
         schedules: scheduleRes.data || [],
         weeklyOffs: weeklyOffRes.data || [],

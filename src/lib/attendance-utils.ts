@@ -1,4 +1,5 @@
-import type { AttendanceRow } from "@/types/database";
+import type { AttendanceRow, EmployeeLeaveRow, WeeklyOffScheduleRow } from "@/types/database";
+import { format, eachDayOfInterval } from "date-fns";
 
 export interface LifetimeSummary {
   total_days_worked: number;
@@ -28,10 +29,91 @@ export interface MonthlySummary {
   late_days: number;
 }
 
+export interface DailyStatus {
+  date: string;
+  status: 'PRESENT' | 'ABSENT' | 'PAID_LEAVE' | 'UNPAID_LEAVE' | 'WEEKLY_OFF' | 'MISSING_CHECK_OUT';
+  checkIn: string | null;
+  checkOut: string | null;
+  durationMinutes: number;
+  lateMinutes: number;
+  overtimeMinutes: number;
+  isLate: boolean;
+  isWeeklyOff: boolean;
+}
+
+export function calculateDailyStatus(
+  date: string,
+  employeeId: string,
+  attendance: AttendanceRow[],
+  leaves: EmployeeLeaveRow[],
+  weeklyOffs: WeeklyOffScheduleRow[],
+  joiningDate: string
+): DailyStatus {
+  const d = new Date(date);
+  const dayOfWeek = d.getDay(); // 0 = Sunday
+
+  if (date < joiningDate) {
+    return {
+      date,
+      status: 'ABSENT',
+      checkIn: null, checkOut: null, durationMinutes: 0, lateMinutes: 0, overtimeMinutes: 0, isLate: false, isWeeklyOff: false
+    };
+  }
+
+  const dayAttendance = attendance.find(a => a.attendance_date === date);
+  const dayLeave = leaves.find(l => l.leave_date === date);
+  const isWeeklyOff = weeklyOffs.some(wo =>
+    wo.day_of_week === dayOfWeek &&
+    date >= wo.effective_from &&
+    (!wo.effective_until || date < wo.effective_until)
+  );
+
+  if (dayAttendance) {
+    const isMissingCheckout = dayAttendance.attendance_state === 'MISSING_CHECK_OUT' || dayAttendance.check_out_at === null;
+    return {
+      date,
+      status: isMissingCheckout ? 'MISSING_CHECK_OUT' : 'PRESENT',
+      checkIn: dayAttendance.check_in_at,
+      checkOut: dayAttendance.check_out_at,
+      durationMinutes: dayAttendance.total_duration_minutes || 0,
+      lateMinutes: dayAttendance.late_minutes || 0,
+      overtimeMinutes: dayAttendance.overtime_minutes || 0,
+      isLate: dayAttendance.is_late,
+      isWeeklyOff: dayAttendance.worked_on_weekly_off
+    };
+  }
+
+  if (dayLeave) {
+    return {
+      date,
+      status: dayLeave.leave_type === 'PAID' ? 'PAID_LEAVE' : 'UNPAID_LEAVE',
+      checkIn: null, checkOut: null, durationMinutes: 0, lateMinutes: 0, overtimeMinutes: 0, isLate: false, isWeeklyOff: false
+    };
+  }
+
+  if (isWeeklyOff) {
+    return {
+      date,
+      status: 'WEEKLY_OFF',
+      checkIn: null, checkOut: null, durationMinutes: 0, lateMinutes: 0, overtimeMinutes: 0, isLate: false, isWeeklyOff: true
+    };
+  }
+
+  return {
+    date,
+    status: 'ABSENT',
+    checkIn: null, checkOut: null, durationMinutes: 0, lateMinutes: 0, overtimeMinutes: 0, isLate: false, isWeeklyOff: false
+  };
+}
+
 export function calculateAttendanceSummaries(
   attendance: AttendanceRow[],
-  leaves: any[] = [],
-  weeklyOffs: any[] = []
+  leaves: EmployeeLeaveRow[] = [],
+  weeklyOffs: WeeklyOffScheduleRow[] = [],
+  employeeId: string,
+  joiningDate: string,
+  startDate?: string,
+  endDate?: string
 ) {
   const lifetime: LifetimeSummary = {
     total_days_worked: 0,
@@ -48,106 +130,65 @@ export function calculateAttendanceSummaries(
 
   const monthlyMap: Record<string, MonthlySummary> = {};
 
-  // Process Attendance
-  const dateGroups = new Map<string, AttendanceRow[]>();
-  attendance.forEach(rec => {
-    const date = rec.attendance_date;
-    if (!dateGroups.has(date)) dateGroups.set(date, []);
-    dateGroups.get(date)!.push(rec);
-  });
+  const summaryStart = startDate ? new Date(startDate) : new Date(joiningDate);
+  const summaryEnd = endDate ? new Date(endDate) : new Date();
+  const days = eachDayOfInterval({ start: summaryStart, end: summaryEnd });
 
-  dateGroups.forEach((sessions, date) => {
-    const d = new Date(date);
-    const year = d.getFullYear();
-    const month = d.getMonth() + 1;
+  days.forEach(day => {
+    const dateStr = format(day, 'yyyy-MM-dd');
+    const statusData = calculateDailyStatus(dateStr, employeeId, attendance, leaves, weeklyOffs, joiningDate);
+    const year = day.getFullYear();
+    const month = day.getMonth() + 1;
     const monthKey = `${year}-${month}`;
 
     if (!monthlyMap[monthKey]) {
       monthlyMap[monthKey] = {
-        year,
-        month,
-        working_days: 0,
-        present_days: 0,
-        absent_days: 0,
-        paid_leave: 0,
-        unpaid_leave: 0,
-        weekly_offs: 0,
-        weekly_offs_worked: 0,
-        total_hours: 0,
-        overtime: 0,
-        late_days: 0,
+        year, month, working_days: 0, present_days: 0, absent_days: 0,
+        paid_leave: 0, unpaid_leave: 0, weekly_offs: 0, weekly_offs_worked: 0,
+        total_hours: 0, overtime: 0, late_days: 0,
       };
     }
 
     const m = monthlyMap[monthKey];
-    const totalWorkingMin = sessions.reduce((acc, s) => acc + (s.working_minutes || 0), 0);
-    const totalOvertimeMin = sessions.reduce((acc, s) => acc + (s.overtime_minutes || 0), 0);
-    const isPresent = sessions.some(s => s.attendance_state === 'CHECKED_OUT');
-    const isLate = sessions.some(s => s.is_late);
-    const workedOff = sessions.some(s => s.worked_on_weekly_off);
 
-    // Lifetime
-    lifetime.total_hours_worked += totalWorkingMin / 60;
-    lifetime.total_overtime += totalOvertimeMin / 60;
-    if (isPresent) lifetime.total_present_days++;
-    if (isLate) lifetime.total_late_arrivals++;
-    if (workedOff) lifetime.weekly_offs_worked++;
-
-    // Monthly
-    m.total_hours += totalWorkingMin / 60;
-    m.overtime += totalOvertimeMin / 60;
-    if (isPresent) m.present_days++;
-    if (isLate) m.late_days++;
-    if (workedOff) m.weekly_offs_worked++;
-  });
-
-  // Process Leaves
-  leaves.forEach(l => {
-    const d = new Date(l.leave_date);
-    const year = d.getFullYear();
-    const month = d.getMonth() + 1;
-    const monthKey = `${year}-${month}`;
-
-    if (!monthlyMap[monthKey]) {
-      monthlyMap[monthKey] = {
-        year,
-        month,
-        working_days: 0,
-        present_days: 0,
-        absent_days: 0,
-        paid_leave: 0,
-        unpaid_leave: 0,
-        weekly_offs: 0,
-        weekly_offs_worked: 0,
-        total_hours: 0,
-        overtime: 0,
-        late_days: 0,
-      };
+    switch (statusData.status) {
+      case 'PRESENT':
+      case 'MISSING_CHECK_OUT':
+        lifetime.total_present_days++;
+        m.present_days++;
+        lifetime.total_hours_worked += statusData.durationMinutes / 60;
+        m.total_hours += statusData.durationMinutes / 60;
+        lifetime.total_overtime += statusData.overtimeMinutes / 60;
+        m.overtime += statusData.overtimeMinutes / 60;
+        if (statusData.isLate) {
+          lifetime.total_late_arrivals++;
+          m.late_days++;
+        }
+        break;
+      case 'ABSENT':
+        lifetime.total_absent_days++;
+        m.absent_days++;
+        break;
+      case 'PAID_LEAVE':
+        lifetime.total_paid_leave++;
+        m.paid_leave++;
+        break;
+      case 'UNPAID_LEAVE':
+        lifetime.total_unpaid_leave++;
+        m.unpaid_leave++;
+        break;
+      case 'WEEKLY_OFF':
+        lifetime.total_weekly_offs++;
+        m.weekly_offs++;
+        break;
     }
 
-    const m = monthlyMap[monthKey];
-    if (l.leave_type === 'PAID') {
-      lifetime.total_paid_leave++;
-      m.paid_leave++;
-    } else {
-      lifetime.total_unpaid_leave++;
-      m.unpaid_leave++;
+    if (statusData.isWeeklyOff) {
+      lifetime.weekly_offs_worked++;
+      m.weekly_offs_worked++;
     }
   });
 
-  // Process Weekly Offs
-  weeklyOffs.forEach(off => {
-    const d = new Date(off.effective_from);
-    const year = d.getFullYear();
-    const month = d.getMonth() + 1;
-    const monthKey = `${year}-${month}`;
-    // Note: Weekly offs are usually recurring, but for summary we often count
-    // total assigned off-days or similar. Given the existing RPC structure,
-    // we'll just count the records for now.
-    lifetime.total_weekly_offs++;
-  });
-
-  // Final adjustments for lifetime
   lifetime.total_days_worked = lifetime.total_present_days;
 
   return {

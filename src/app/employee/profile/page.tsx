@@ -49,8 +49,22 @@ export default async function EmployeeProfilePage() {
       .eq("employee_id", userId)
       .order("attendance_date", { ascending: false });
 
+    const { data: leaves } = await supabase
+      .from("employee_leaves")
+      .select("*")
+      .eq("employee_id", userId);
+
+    const { data: weeklyOffs } = await supabase
+      .from("weekly_off_schedules")
+      .select("*")
+      .eq("employee_id", userId);
+
     const { lifetimeSummary, monthlySummaries } = calculateAttendanceSummaries(
-      detailedAttendance || []
+      detailedAttendance || [],
+      leaves || [],
+      weeklyOffs || [],
+      userId,
+      (employee as any).joining_date
     );
 
     return (
@@ -64,6 +78,8 @@ export default async function EmployeeProfilePage() {
           lifetimeSummary={lifetimeSummary}
           monthlySummaries={monthlySummaries}
           detailedAttendance={detailedAttendance || []}
+          leaves={leaves || []}
+          weeklyOffs={weeklyOffs || []}
         />
         <EmployeeDeviceRegistration />
       </div>

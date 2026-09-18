@@ -112,6 +112,10 @@ export function EmployeeForm({ action, initialState, employee, submitLabel }: Em
           <Input id="position" name="position" defaultValue={employee?.position} required />
         </Field>
 
+        <Field label="Base Salary" htmlFor="baseSalary" error={errors.baseSalary}>
+          <Input id="baseSalary" name="baseSalary" type="number" defaultValue={employee?.base_salary ?? ""} placeholder="0.00" />
+        </Field>
+
         <Field label="Joining date" htmlFor="joiningDate" required error={errors.joiningDate}>
           <Input
             id="joiningDate"
