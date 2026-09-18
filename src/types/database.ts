@@ -79,6 +79,7 @@ export interface EmployeeRow {
   is_active: boolean;
   deactivated_at: string | null;
   allow_multiple_sessions: boolean;
+  base_salary: number | null;
   created_at: string;
   updated_at: string;
 }

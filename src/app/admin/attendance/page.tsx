@@ -177,6 +177,8 @@ export default async function AttendancePage({
                                 <CorrectionTrigger
                                   attendance={s}
                                   employeeName={item.employee.profile.full_name}
+                                  employeeId={item.employee.id}
+                                  date={date}
                                 />
                               </div>
                             ))
@@ -194,6 +196,8 @@ export default async function AttendancePage({
                         <CorrectionTrigger
                           attendance={null}
                           employeeName={item.employee.profile.full_name}
+                          employeeId={item.employee.id}
+                          date={date}
                         />
                       )}
                     </div>

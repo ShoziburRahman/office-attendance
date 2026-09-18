@@ -72,10 +72,10 @@ export async function loadSalaryData(employeeId: string, month: number, year: nu
   // Calculate actual calendar days in the selected month/year
   const salaryDays = new Date(year, month, 0).getDate();
 
-  // 1. Fetch employee name
+  // 1. Fetch employee name and base salary
   const { data: empInfo } = await supabase
     .from("employees")
-    .select("profiles(full_name)")
+    .select("base_salary, profiles(full_name)")
     .eq("id", employeeId)
     .single();
 
@@ -107,7 +107,7 @@ export async function loadSalaryData(employeeId: string, month: number, year: nu
     month,
     year,
     salaryDays,
-    basicSalary: 0,
+    basicSalary: (empInfo as any)?.base_salary ?? 0,
     overtimeHours,
     overtimeRate: 0,
     overtimeAmount: 0,
@@ -115,7 +115,7 @@ export async function loadSalaryData(employeeId: string, month: number, year: nu
     workingDays: reportData.summary.totalWorkingDays,
     presentDays: reportData.summary.presentDays,
     paidLeave: reportData.summary.paidLeaveDays,
-    unpaidLeave: reportData.summary.unpaidLeaveDays,
+    unpaidLeave: reportData.summary.unpaidLeaveDays + reportData.summary.absentDays,
     unpaidLeaveDeduction: 0,
     penaltyAmount: 0,
     penaltyReason: "",

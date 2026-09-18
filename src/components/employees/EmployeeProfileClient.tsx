@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { EmployeeProfileManager } from "@/components/employees/EmployeeProfileManager";
 import { notFound } from "next/navigation";
 import { calculateAttendanceSummaries } from "@/lib/attendance-utils";
@@ -10,6 +10,7 @@ import {
   addWeeklyOff,
   addEmployeeLeave
 } from "@/app/admin/employees/actions";
+import { getEmployeeProfileFilteredData, type PeriodFilterConfig } from "@/app/admin/employees/profile-actions";
 import {
   initialEmployeeActionState,
   initialScheduleActionState,
@@ -21,6 +22,10 @@ import { requireUser } from "@/lib/auth/client";
 import { Button } from "@/components/ui/Button";
 
 export function EmployeeProfileClient({ id, initialUser, initialData }: { id: string; initialUser: any; initialData?: any }) {
+  const [filter, setFilter] = useState<PeriodFilterConfig>({
+    type: 'LIFETIME',
+  });
+  const [isPending, startTransition] = useTransition();
   const [data, setData] = useState<{
     employee: any;
     lifetimeSummary: any;
@@ -35,80 +40,56 @@ export function EmployeeProfileClient({ id, initialUser, initialData }: { id: st
 
   useEffect(() => {
     async function loadData() {
+      // For Lifetime, we prioritize the initial data from the server to maintain original behavior
+      if (filter.type === 'LIFETIME' && initialData) {
+        setData({
+          employee: initialData.employee,
+          lifetimeSummary: initialData.lifetimeSummary,
+          monthlySummaries: initialData.monthlySummaries || [],
+          detailedAttendance: initialData.detailedAttendance || [],
+          schedules: initialData.schedules || [],
+          weeklyOffs: initialData.weeklyOffs || [],
+          leaves: initialData.leaves || [],
+        });
+        setIsLoading(false);
+        return;
+      }
+
       setIsLoading(true);
       setError(null);
       try {
-        // Use the user passed from the server if available
-        let currentUser = initialUser;
-
-        if (!currentUser) {
-          const { data: { user } } = await createClient().auth.getUser();
-          if (!user) {
-            throw new Error("requireUser() called with no session. Please log in again.");
-          }
-          currentUser = user;
-        }
-
-        const supabase = createClient();
-
-        const { data: employee, error: empError } = await supabase
-          .from("employees")
-          .select("*, profile:profiles!employees_id_fkey(*)")
-          .eq("id", id)
-          .single()
-          .returns<any>();
-
-        if (empError || !employee) {
-          setError(empError?.message || "Employee not found");
-          return;
-        }
-
-        const { data: rpcLifetime } = await (supabase as any).rpc("fn_get_employee_lifetime_summary", {
-          p_employee_id: id,
-        });
-
-        const { data: rpcMonthly } = await (supabase as any).rpc("fn_get_employee_monthly_summaries", {
-          p_employee_id: id,
-        });
-
-        const { data: detailedAttendance } = await supabase
-          .from("attendance")
-          .select("*")
-          .eq("employee_id", id)
-          .order("attendance_date", { ascending: false });
-
-        const { data: schedules } = await supabase
-          .from("employee_schedules")
-          .select("*")
-          .eq("employee_id", id)
-          .order("effective_from", { ascending: false });
-
-        const { data: weeklyOffs } = await supabase
-          .from("weekly_off_schedules")
-          .select("*")
-          .eq("employee_id", id)
-          .order("effective_from", { ascending: false });
-
-        const { data: leaves } = await supabase
-          .from("employee_leaves")
-          .select("*")
-          .eq("employee_id", id)
-          .order("leave_date", { ascending: false });
+        const result = await getEmployeeProfileFilteredData(id, filter);
+        if (!result) throw new Error("No data returned from server");
 
         const { lifetimeSummary, monthlySummaries } = calculateAttendanceSummaries(
-          detailedAttendance || [],
-          leaves || [],
-          weeklyOffs || []
+          result.attendance || [],
+          result.leaves || [],
+          result.weeklyOffs || [],
+          id,
+          result.employee.joining_date,
+          result.range?.start,
+          result.range?.end
         );
 
         setData({
-          employee,
-          lifetimeSummary,
-          monthlySummaries,
-          detailedAttendance: detailedAttendance || [],
-          schedules: schedules || [],
-          weeklyOffs: weeklyOffs || [],
-          leaves: leaves || [],
+          employee: result.employee,
+          lifetimeSummary: lifetimeSummary || {
+            total_days_worked: 0,
+            total_hours_worked: 0,
+            total_overtime: 0,
+            total_present_days: 0,
+            total_absent_days: 0,
+            total_paid_leave: 0,
+            total_unpaid_leave: 0,
+            total_weekly_offs: 0,
+            weekly_offs_worked: 0,
+            total_late_arrivals: 0,
+          },
+          monthlySummaries: monthlySummaries || [],
+          detailedAttendance: result.attendance || [],
+          schedules: result.schedules || [],
+          weeklyOffs: result.weeklyOffs || [],
+          leaves: result.leaves || [],
         });
       } catch (error: any) {
         console.error("Error loading employee profile:", error);
@@ -119,7 +100,13 @@ export function EmployeeProfileClient({ id, initialUser, initialData }: { id: st
     }
 
     loadData();
-  }, [id]);
+  }, [id, filter, initialData]);
+
+  const handleFilterChange = (newFilter: PeriodFilterConfig) => {
+    startTransition(() => {
+      setFilter(newFilter);
+    });
+  };
 
   if (isLoading) {
     return (
@@ -152,6 +139,8 @@ export function EmployeeProfileClient({ id, initialUser, initialData }: { id: st
       schedules={data.schedules}
       weeklyOffs={data.weeklyOffs}
       leaves={data.leaves}
+      filter={filter}
+      onFilterChange={handleFilterChange}
       updateAction={(prevState, formData) => updateEmployee(id, prevState, formData)}
       addScheduleAction={(prevState, formData) => addEmployeeSchedule(id, prevState, formData)}
       addWeeklyOffAction={(prevState, formData) => addWeeklyOff(id, prevState, formData)}

@@ -4,7 +4,9 @@ import { useState } from "react";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { initials, formatTime } from "@/lib/utils/format";
-import { format } from "date-fns";
+import { format, eachDayOfInterval } from "date-fns";
+import { calculateDailyStatus } from "@/lib/attendance-utils";
+import type { AttendanceRow, EmployeeLeaveRow, WeeklyOffScheduleRow } from "@/types/database";
 
 interface LifetimeSummary {
   total_days_worked: number;
@@ -34,26 +36,14 @@ interface MonthlySummary {
   late_days: number;
 }
 
-interface AttendanceRecord {
-  attendance_date: string;
-  check_in_at: string | null;
-  check_out_at: string | null;
-  total_duration_minutes: number | null;
-  working_minutes: number | null;
-  overtime_minutes: number | null;
-  day_classification: string;
-  attendance_state: string;
-  late_minutes: number;
-  is_late: boolean;
-  worked_on_weekly_off: boolean;
-}
-
 interface EmployeeProfileViewProps {
   employee: any;
   activeSchedule?: any;
   lifetimeSummary: LifetimeSummary;
   monthlySummaries: MonthlySummary[];
-  detailedAttendance: AttendanceRecord[];
+  detailedAttendance: AttendanceRow[];
+  leaves: EmployeeLeaveRow[];
+  weeklyOffs: WeeklyOffScheduleRow[];
 }
 
 export function EmployeeProfileView({
@@ -62,13 +52,20 @@ export function EmployeeProfileView({
   lifetimeSummary,
   monthlySummaries,
   detailedAttendance,
+  leaves,
+  weeklyOffs,
 }: EmployeeProfileViewProps) {
   const [expandedMonth, setExpandedMonth] = useState<string | null>(null);
   const [imageError, setImageError] = useState(false);
 
 
   const getMonthName = (month: number) => {
-    return format(new Date(2000, month - 1, 1), "MMMM");
+    if (!month || isNaN(month)) return "Unknown Month";
+    try {
+      return format(new Date(2000, month - 1, 1), "MMMM");
+    } catch (e) {
+      return "Unknown Month";
+    }
   };
 
   const toggleMonth = (yearMonth: string) => {
@@ -149,28 +146,28 @@ export function EmployeeProfileView({
       </section>
 
       <section>
-        <h2 className="text-sm font-semibold text-ink-900 mb-4 uppercase tracking-wider">Lifetime Statistics</h2>
+        <h2 className="text-sm font-semibold text-ink-900 mb-4 uppercase tracking-wider">Period Statistics</h2>
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-          <SummaryCard label="Days Worked" value={lifetimeSummary.total_present_days} />
-          <SummaryCard label="Total Hours" value={`${lifetimeSummary.total_hours_worked.toFixed(1)}h`} />
-          <SummaryCard label="Overtime" value={`${lifetimeSummary.total_overtime.toFixed(1)}h`} />
-          <SummaryCard label="Absent Days" value={lifetimeSummary.total_absent_days} tone="late" />
-          <SummaryCard label="Paid Leave" value={lifetimeSummary.total_paid_leave} />
-          <SummaryCard label="Unpaid Leave" value={lifetimeSummary.total_unpaid_leave} />
-          <SummaryCard label="Weekly Offs" value={lifetimeSummary.total_weekly_offs} />
-          <SummaryCard label="Offs Worked" value={lifetimeSummary.weekly_offs_worked} />
-          <SummaryCard label="Late Arrivals" value={lifetimeSummary.total_late_arrivals} tone="late" />
-          <SummaryCard label="Total Present" value={lifetimeSummary.total_present_days} />
+          <SummaryCard label="Days Worked" value={lifetimeSummary?.total_present_days ?? 0} />
+          <SummaryCard label="Total Hours" value={`${(lifetimeSummary?.total_hours_worked ?? 0).toFixed(1)}h`} />
+          <SummaryCard label="Overtime" value={`${(lifetimeSummary?.total_overtime ?? 0).toFixed(1)}h`} />
+          <SummaryCard label="Absent Days" value={lifetimeSummary?.total_absent_days ?? 0} tone="late" />
+          <SummaryCard label="Paid Leave" value={lifetimeSummary?.total_paid_leave ?? 0} />
+          <SummaryCard label="Unpaid Leave" value={lifetimeSummary?.total_unpaid_leave ?? 0} />
+          <SummaryCard label="Weekly Offs" value={lifetimeSummary?.total_weekly_offs ?? 0} />
+          <SummaryCard label="Offs Worked" value={lifetimeSummary?.weekly_offs_worked ?? 0} />
+          <SummaryCard label="Late Arrivals" value={lifetimeSummary?.total_late_arrivals ?? 0} tone="late" />
+          <SummaryCard label="Total Present" value={lifetimeSummary?.total_present_days ?? 0} />
         </div>
       </section>
 
       <section>
         <h2 className="text-sm font-semibold text-ink-900 mb-4 uppercase tracking-wider">Attendance History</h2>
         <div className="space-y-4">
-          {monthlySummaries.length === 0 ? (
+          {(monthlySummaries || []).length === 0 ? (
             <p className="text-sm text-ink-400 italic">No attendance records found.</p>
           ) : (
-            monthlySummaries.reduce((acc: any[], curr) => {
+            (monthlySummaries || []).reduce((acc: any[], curr) => {
               const year = curr.year;
               const monthIdx = acc.findIndex(item => item.year === year);
               if (monthIdx === -1) {
@@ -232,26 +229,38 @@ export function EmployeeProfileView({
                                   </tr>
                                 </thead>
                                 <tbody className="divide-y divide-ink-50">
-                                  {detailedAttendance
-                                    .filter(a => {
-                                      const d = new Date(a.attendance_date);
-                                      return d.getFullYear() === m.year && (d.getMonth() + 1) === m.month;
-                                    })
-                                    .sort((a, b) => b.attendance_date.localeCompare(a.attendance_date))
-                                    .map((rec) => (
-                                      <tr key={rec.attendance_date} className="hover:bg-white transition-colors">
-                                        <td className="py-3 text-ink-900 font-medium">{rec.attendance_date}</td>
-                                        <td className="py-3 text-ink-600">{rec.check_in_at ? format(new Date(rec.check_in_at), "p") : '—'}</td>
-                                        <td className="py-3 text-ink-600">{rec.check_out_at ? format(new Date(rec.check_out_at), "p") : '...'}</td>
-                                        <td className="py-3 text-ink-600">{rec.total_duration_minutes ? `${Math.floor(rec.total_duration_minutes / 60)}h ${rec.total_duration_minutes % 60}m` : '—'}</td>
-                                        <td className="py-3">
-                                          <Badge tone={getStatusTone(rec.day_classification, rec.attendance_state)}>
-                                            {rec.day_classification === 'NORMAL_WORKING_DAY' && rec.attendance_state === 'CHECKED_OUT' ? 'Present' : rec.day_classification}
-                                          </Badge>
-                                        </td>
-                                        <td className="py-3 text-ink-600">{rec.late_minutes}m</td>
-                                      </tr>
-                                    ))}
+                                  {(() => {
+                                    const startDate = new Date(m.year, m.month - 1, 1);
+                                    const endDate = new Date(m.year, m.month, 0);
+                                    const days = eachDayOfInterval({ start: startDate, end: endDate });
+
+                                    return days.sort((a, b) => b.getTime() - a.getTime()).map((day) => {
+                                      const dateStr = format(day, 'yyyy-MM-dd');
+                                      const statusData = calculateDailyStatus(
+                                        dateStr,
+                                        employee.id,
+                                        detailedAttendance,
+                                        leaves,
+                                        weeklyOffs,
+                                        employee.joining_date
+                                      );
+
+                                      return (
+                                        <tr key={dateStr} className="hover:bg-white transition-colors">
+                                          <td className="py-3 text-ink-900 font-medium">{dateStr}</td>
+                                          <td className="py-3 text-ink-600">{statusData.checkIn ? format(new Date(statusData.checkIn), "p") : '—'}</td>
+                                          <td className="py-3 text-ink-600">{statusData.checkOut ? format(new Date(statusData.checkOut), "p") : '...'}</td>
+                                          <td className="py-3 text-ink-600">{statusData.durationMinutes ? `${Math.floor(statusData.durationMinutes / 60)}h ${statusData.durationMinutes % 60}m` : '—'}</td>
+                                          <td className="py-3">
+                                            <Badge tone={getStatusTone(statusData.status)}>
+                                              {statusData.status === 'PRESENT' ? 'Present' : statusData.status === 'MISSING_CHECK_OUT' ? 'Active' : statusData.status}
+                                            </Badge>
+                                          </td>
+                                          <td className="py-3 text-ink-600">{statusData.lateMinutes}m</td>
+                                        </tr>
+                                      );
+                                    });
+                                  })()}
                                 </tbody>
                                 </table>
                             </div>
@@ -290,12 +299,12 @@ function StatItem({ label, value, tone = "neutral" }: { label: string, value: an
   );
 }
 
-function getStatusTone(classification: string, state: string) {
-  if (classification === 'ABSENT') return 'late';
-  if (classification === 'WEEKLY_OFF') return 'neutral';
-  if (classification === 'PAID_LEAVE') return 'present';
-  if (classification === 'UNPAID_LEAVE') return 'neutral';
-  if (state === 'CHECKED_OUT') return 'present';
+function getStatusTone(status: string) {
+  if (status === 'ABSENT') return 'late';
+  if (status === 'WEEKLY_OFF') return 'neutral';
+  if (status === 'PAID_LEAVE') return 'present';
+  if (status === 'UNPAID_LEAVE') return 'neutral';
+  if (status === 'PRESENT' || status === 'MISSING_CHECKOUT') return 'present';
   return 'neutral';
 }
 

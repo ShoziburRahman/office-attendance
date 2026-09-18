@@ -9,7 +9,7 @@ import { Dialog } from "@/components/ui/Dialog";
 import Link from "next/link";
 import { getCurrentLocation } from "@/lib/native/location";
 import { getWifiInfo, verifyWifi } from "@/lib/native/wifi";
-import { checkIn, checkOut, requestAdditionalSession, requestWfh, getBiometricChallenge, checkDeviceStatus } from "@/app/employee/actions";
+import { checkIn, checkOut, requestAdditionalSession, requestWfh, getBiometricChallenge, checkDeviceStatus, fetchMySessions } from "@/app/employee/actions";
 import { format, addMinutes } from "date-fns";
 import type { AttendanceRow as Attendance } from "@/types/database";
 import { createClient } from "@/lib/supabase/client";
@@ -30,6 +30,11 @@ export function AttendanceDashboard({ initialSessions }: AttendanceDashboardProp
   const [selectedType, setSelectedType] = useState<AttendanceType | null>(null);
   const [additionalReason, setAdditionalReason] = useState("");
   const [wfhReason, setWfhReason] = useState("");
+
+  // Pull-to-Refresh states
+  const [pullY, setPullY] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [touchStartY, setTouchStartY] = useState(0);
 
   const [showConfirm, setShowConfirm] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -73,6 +78,45 @@ export function AttendanceDashboard({ initialSessions }: AttendanceDashboardProp
     return () => clearInterval(interval);
   }, [sessions]);
 
+  async function handleRefresh() {
+    setIsRefreshing(true);
+    try {
+      const updatedSessions = await fetchMySessions();
+      setSessions(updatedSessions);
+      setState(updatedSessions.some(s => s.attendance_state === "CHECKED_IN") ? "ACTIVE" : "IDLE");
+    } catch (e: any) {
+      setError("Failed to refresh data.");
+    } finally {
+      setIsRefreshing(false);
+      setPullY(0);
+    }
+  }
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    if (touch) {
+      setTouchStartY(touch.clientY);
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    if (!touch) return;
+    const currentY = touch.clientY;
+    const diff = currentY - touchStartY;
+    if (diff > 0) {
+      setPullY(Math.pow(diff, 0.8));
+    }
+  };
+
+  const handleTouchEnd = async () => {
+    if (pullY > 70) {
+      await handleRefresh();
+    } else {
+      setPullY(0);
+    }
+  };
+
   const resetError = () => setError(null);
 
   async function startVerification() {
@@ -82,7 +126,6 @@ export function AttendanceDashboard({ initialSessions }: AttendanceDashboardProp
     setError(null);
 
     try {
-      // 1. Device Status Check
       const deviceStatus = await checkDeviceStatus();
       if (deviceStatus.status !== "REGISTERED") {
         setError(`Device not registered. Status: ${deviceStatus.status}. Please contact your administrator.`);
@@ -116,14 +159,11 @@ export function AttendanceDashboard({ initialSessions }: AttendanceDashboardProp
 
     let loc;
     try {
-      // 1. GPS & Wifi
       loc = await getCurrentLocation();
       const wifiInfo = await getWifiInfo();
 
-      // 2. Biometric Challenge-Response
       const { challenge, challengeId, expiresAt } = await getBiometricChallenge("CHECK_IN");
 
-      // Call native biometric sign
       const biometricResult = await (window as any).AndroidBiometric.signChallenge(challenge);
       const resultParsed = JSON.parse(biometricResult);
 
@@ -181,14 +221,11 @@ export function AttendanceDashboard({ initialSessions }: AttendanceDashboardProp
     setLockError(null);
 
     try {
-      // 1. GPS & Wifi
       const loc = await getCurrentLocation();
       const wifiInfo = await getWifiInfo();
 
-      // 2. Biometric Challenge-Response
       const { challenge, challengeId, expiresAt } = await getBiometricChallenge("CHECK_OUT");
 
-      // Call native biometric sign
       const biometricResult = await (window as any).AndroidBiometric.signChallenge(challenge);
       const resultParsed = JSON.parse(biometricResult);
 
@@ -284,7 +321,6 @@ export function AttendanceDashboard({ initialSessions }: AttendanceDashboardProp
 
   const totalWorkingMinutes = completedMinutes + activeMinutes;
 
-  // Lock logic for the button
   const isLocked = (() => {
     if (!activeSession) return false;
     const unlockTime = addMinutes(new Date(activeSession.check_in_at), minMinutes);
@@ -296,212 +332,240 @@ export function AttendanceDashboard({ initialSessions }: AttendanceDashboardProp
     : "";
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-ink-900">Attendance</h1>
-        <Link href="/employee/profile">
-          <Button variant="secondary" size="sm">My Profile</Button>
-        </Link>
+    <div
+      className="space-y-6 relative overflow-hidden"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
+      <div
+        className="absolute top-0 left-0 right-0 flex justify-center items-center transition-opacity duration-200"
+        style={{
+          transform: `translateY(${pullY - 30}px)`,
+          opacity: pullY > 30 ? 1 : 0,
+          height: '40px'
+        }}
+      >
+        <div className="flex items-center gap-2 text-xs text-ink-400 font-medium">
+          {isRefreshing ? (
+            <div className="w-4 h-4 border-2 border-teal-500 border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <span className="text-lg">↓</span>
+          )}
+          {pullY > 70 ? "Release to refresh" : "Pull to refresh"}
+        </div>
       </div>
-      <Card className="mt-6">
-        <CardHeader>
-          <p className="text-sm font-medium text-ink-900">Attendance</p>
-        </CardHeader>
-        <CardBody>
-          {error && (
-            <p role="alert" className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-status-late">
-              {error}
-            </p>
-          )}
 
-          {(state === "IDLE" || state === "CHECKING_IN" || state === "VERIFYING") && (
-            <div className="flex flex-col gap-6">
-              <div className="flex flex-col gap-3">
-                <p className="text-sm text-ink-600">Select attendance type to check in:</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <Button
-                    variant={selectedType === "OFFICE" ? "primary" : "secondary"}
-                    onClick={() => { setSelectedType("OFFICE"); resetError(); }}
-                  >
-                    Office
-                  </Button>
-                  <Button
-                    variant={selectedType === "WORK_FROM_HOME" ? "primary" : "secondary"}
-                    onClick={() => { setSelectedType("WORK_FROM_HOME"); resetError(); }}
-                  >
-                    WFH
-                  </Button>
-                </div>
-              </div>
+      <div
+        className="transition-transform duration-200 ease-out"
+        style={{ transform: `translateY(${pullY}px)` }}
+      >
+        <div className="flex items-center justify-between">
+          <h1 className="text-lg font-semibold text-ink-900">Attendance</h1>
+          <Link href="/employee/profile">
+            <Button variant="secondary" size="sm">My Profile</Button>
+          </Link>
+        </div>
+        <Card className="mt-6">
+          <CardHeader>
+            <p className="text-sm font-medium text-ink-900">Attendance</p>
+          </CardHeader>
+          <CardBody>
+            {error && (
+              <p role="alert" className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-status-late">
+                {error}
+              </p>
+            )}
 
-              <Button
-                disabled={!selectedType}
-                onClick={startVerification}
-                isLoading={state === "VERIFYING"}
-              >
-                Check In
-              </Button>
-            </div>
-          )}
-
-          {(state === "ACTIVE" || state === "CHECKING_OUT") && (
-            <div className="space-y-6">
-              {activeSession && (
-                <div className="flex flex-col items-center gap-6 text-center">
-                  <div className="flex flex-col gap-1">
-                    <Badge tone="present" className="mx-auto">Checked In</Badge>
-                    <p className="text-sm text-ink-400">
-                      Since {format(new Date(activeSession.check_in_at), "p, MMM d")}
-                    </p>
+            {(state === "IDLE" || state === "CHECKING_IN" || state === "VERIFYING") && (
+              <div className="flex flex-col gap-6">
+                <div className="flex flex-col gap-3">
+                  <p className="text-sm text-ink-600">Select attendance type to check in:</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Button
+                      variant={selectedType === "OFFICE" ? "primary" : "secondary"}
+                      onClick={() => { setSelectedType("OFFICE"); resetError(); }}
+                    >
+                      Office
+                    </Button>
+                    <Button
+                      variant={selectedType === "WORK_FROM_HOME" ? "primary" : "secondary"}
+                      onClick={() => { setSelectedType("WORK_FROM_HOME"); resetError(); }}
+                    >
+                      WFH
+                    </Button>
                   </div>
+                </div>
 
-                  <div className="w-full border-t border-ink-100 pt-6">
-                    <div className="flex flex-col items-center gap-2">
-                      <Button
-                        className="w-full"
-                        isLoading={state === "CHECKING_OUT"}
-                        onClick={handleCheckOut}
-                        disabled={isLocked}
-                      >
-                        Check Out
-                      </Button>
-                      {isLocked && (
-                        <p className="text-[10px] text-status-late font-medium">
-                          Locked until {unlockTimeFormatted}
-                        </p>
-                      )}
+                <Button
+                  disabled={!selectedType}
+                  onClick={startVerification}
+                  isLoading={state === "VERIFYING"}
+                >
+                  Check In
+                </Button>
+              </div>
+            )}
+
+            {(state === "ACTIVE" || state === "CHECKING_OUT") && (
+              <div className="space-y-6">
+                {activeSession && (
+                  <div className="flex flex-col items-center gap-6 text-center">
+                    <div className="flex flex-col gap-1">
+                      <Badge tone="present" className="mx-auto">Checked In</Badge>
+                      <p className="text-sm text-ink-400">
+                        Since {format(new Date(activeSession.check_in_at), "p, MMM d")}
+                      </p>
+                    </div>
+
+                    <div className="w-full border-t border-ink-100 pt-6">
+                      <div className="flex flex-col items-center gap-2">
+                        <Button
+                          className="w-full"
+                          isLoading={state === "CHECKING_OUT"}
+                          onClick={handleCheckOut}
+                          disabled={isLocked}
+                        >
+                          Check Out
+                        </Button>
+                        {isLocked && (
+                          <p className="text-[10px] text-status-late font-medium">
+                            Locked until {unlockTimeFormatted}
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {sessions.length > 0 && (
-                <div className="border-t border-ink-100 pt-6 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-semibold text-ink-900">Today's Activity</h3>
-                    <Badge tone="neutral" className="text-[10px]">
-                      Total Working: {formatMinutes(totalWorkingMinutes)}
-                    </Badge>
-                  </div>
-                  <div className="space-y-2">
-                    {sessions.map((s, idx) => (
-                      <div key={s.id} className="flex items-center justify-between p-2 rounded-md bg-ink-50 border border-ink-100 text-xs">
-                        <div className="flex flex-col">
-                          <span className="font-medium text-ink-900">Session {s.session_number} ({s.attendance_type})</span>
-                          <span className="text-ink-400">
-                            {format(new Date(s.check_in_at), "p")} {s.check_out_at ? ` → ${format(new Date(s.check_out_at), "p")}` : " → Active"}
-                          </span>
+                {sessions.length > 0 && (
+                  <div className="border-t border-ink-100 pt-6 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-semibold text-ink-900">Today's Activity</h3>
+                      <Badge tone="neutral" className="text-[10px]">
+                        Total Working: {formatMinutes(totalWorkingMinutes)}
+                      </Badge>
+                    </div>
+                    <div className="space-y-2">
+                      {sessions.map((s, idx) => (
+                        <div key={s.id} className="flex items-center justify-between p-2 rounded-md bg-ink-50 border border-ink-100 text-xs">
+                          <div className="flex flex-col">
+                            <span className="font-medium text-ink-900">Session {s.session_number} ({s.attendance_type})</span>
+                            <span className="text-ink-400">
+                              {format(new Date(s.check_in_at), "p")} {s.check_out_at ? ` → ${format(new Date(s.check_out_at), "p")}` : " → Active"}
+                            </span>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-ink-600 font-medium">
+                              {s.working_minutes !== null ? `${s.working_minutes}m` : "—"}
+                            </span>
+                          </div>
                         </div>
-                        <div className="text-right">
-                          <span className="text-ink-600 font-medium">
-                            {s.working_minutes !== null ? `${s.working_minutes}m` : "—"}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              <Dialog
-                isOpen={!!lockError}
-                onClose={() => setLockError(null)}
-                title="Check-out Locked"
-              >
-                <div className="text-center space-y-4">
-                  <p className="text-sm text-ink-600">
-                    {lockError?.message}
-                  </p>
-                  <Button className="w-full" onClick={() => setLockError(null)}>
-                    OK
-                  </Button>
-                </div>
-              </Dialog>
-            </div>
-          )}
-
-          {(state === "ADDITIONAL_REQUIRED" || (state === "CHECKING_IN" && !selectedType)) && (
-            <div className="flex flex-col gap-4">
-              <div className="rounded-md bg-amber-50 p-3 text-sm text-amber-800">
-                You have already completed a session today. Additional attendance requires admin approval.
-              </div>
-              <Field label="Reason for additional session" htmlFor="reason" required>
-                <Input
-                  id="reason"
-                  name="reason"
-                  placeholder="e.g. Worked late for project X"
-                  value={additionalReason}
-                  onChange={(e) => setAdditionalReason(e.target.value)}
-                  required
-                />
-              </Field>
-              <Button
-                isLoading={state === "CHECKING_IN"}
-                onClick={handleRequestAdditional}
-              >
-                Request Approval
-              </Button>
-              <Button variant="secondary" onClick={() => setState("IDLE")}>
-                Cancel
-              </Button>
-            </div>
-          )}
-
-          {(state === "WFH_APPROVAL_REQUIRED" || (state === "CHECKING_IN" && selectedType === "WORK_FROM_HOME")) && (
-            <div className="flex flex-col gap-4">
-              <div className="rounded-md bg-amber-50 p-3 text-sm text-amber-800">
-                Work-from-home attendance requires admin approval. Please submit a request.
-              </div>
-              <Field label="Reason for WFH" htmlFor="wfhReason" required>
-                <Input
-                  id="wfhReason"
-                  name="wfhReason"
-                  placeholder="e.g. Home internet issue / Personal emergency"
-                  value={wfhReason}
-                  onChange={(e) => setWfhReason(e.target.value)}
-                  required
-                />
-              </Field>
-              <Button
-                isLoading={state === "CHECKING_IN"}
-                onClick={handleRequestWfh}
-              >
-                Request WFH Approval
-              </Button>
-              <Button variant="secondary" onClick={() => setState("IDLE")}>
-                Cancel
-              </Button>
-            </div>
-          )}
-
-          <Dialog
-            isOpen={showConfirm}
-            onClose={() => setShowConfirm(false)}
-            title="Confirm Check-In"
-          >
-            <div className="text-center space-y-4">
-              <p className="text-sm text-ink-600">Are you sure you want to check in?</p>
-              <div className="flex gap-3">
-                <Button
-                  variant="secondary"
-                  className="flex-1"
-                  onClick={() => setShowConfirm(false)}
-                  disabled={state === "CHECKING_IN"}
+                <Dialog
+                  isOpen={!!lockError}
+                  onClose={() => setLockError(null)}
+                  title="Check-out Locked"
                 >
+                  <div className="text-center space-y-4">
+                    <p className="text-sm text-ink-600">
+                      {lockError?.message}
+                    </p>
+                    <Button className="w-full" onClick={() => setLockError(null)}>
+                      OK
+                    </Button>
+                  </div>
+                </Dialog>
+              </div>
+            )}
+
+            {(state === "ADDITIONAL_REQUIRED" || (state === "CHECKING_IN" && !selectedType)) && (
+              <div className="flex flex-col gap-4">
+                <div className="rounded-md bg-amber-50 p-3 text-sm text-amber-800">
+                  You have already completed a session today. Additional attendance requires admin approval.
+                </div>
+                <Field label="Reason for additional session" htmlFor="reason" required>
+                  <Input
+                    id="reason"
+                    name="reason"
+                    placeholder="e.g. Worked late for project X"
+                    value={additionalReason}
+                    onChange={(e) => setAdditionalReason(e.target.value)}
+                    required
+                  />
+                </Field>
+                <Button
+                  isLoading={state === "CHECKING_IN"}
+                  onClick={handleRequestAdditional}
+                >
+                  Request Approval
+                </Button>
+                <Button variant="secondary" onClick={() => setState("IDLE")}>
                   Cancel
                 </Button>
+              </div>
+            )}
+
+            {(state === "WFH_APPROVAL_REQUIRED" || (state === "CHECKING_IN" && selectedType === "WORK_FROM_HOME")) && (
+              <div className="flex flex-col gap-4">
+                <div className="rounded-md bg-amber-50 p-3 text-sm text-amber-800">
+                  Work-from-home attendance requires admin approval. Please submit a request.
+                </div>
+                <Field label="Reason for WFH" htmlFor="wfhReason" required>
+                  <Input
+                    id="wfhReason"
+                    name="wfhReason"
+                    placeholder="e.g. Home internet issue / Personal emergency"
+                    value={wfhReason}
+                    onChange={(e) => setWfhReason(e.target.value)}
+                    required
+                  />
+                </Field>
                 <Button
-                  className="flex-1"
-                  onClick={handleCheckIn}
                   isLoading={state === "CHECKING_IN"}
+                  onClick={handleRequestWfh}
                 >
-                  Confirm
+                  Request WFH Approval
+                </Button>
+                <Button variant="secondary" onClick={() => setState("IDLE")}>
+                  Cancel
                 </Button>
               </div>
-            </div>
-          </Dialog>
-        </CardBody>
-      </Card>
+            )}
+
+            <Dialog
+              isOpen={showConfirm}
+              onClose={() => setShowConfirm(false)}
+              title="Confirm Check-In"
+            >
+              <div className="text-center space-y-4">
+                <p className="text-sm text-ink-600">Are you sure you want to check in?</p>
+                <div className="flex gap-3">
+                  <Button
+                    variant="secondary"
+                    className="flex-1"
+                    onClick={() => setShowConfirm(false)}
+                    disabled={state === "CHECKING_IN"}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    className="flex-1"
+                    onClick={handleCheckIn}
+                    isLoading={state === "CHECKING_IN"}
+                  >
+                    Confirm
+                  </Button>
+                </div>
+              </div>
+            </Dialog>
+          </CardBody>
+        </Card>
+      </div>
     </div>
   );
 }
