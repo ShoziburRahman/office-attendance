@@ -172,7 +172,7 @@ export default async function AttendancePage({
                               <div key={s.id} className="flex items-center gap-3 text-xs">
                                 <span className="text-ink-400">S{s.session_number}:</span>
                                 <span className="text-ink-600">
-                                  {s.check_in_at ? new Date(s.check_in_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'N/A'} → {s.check_out_at ? new Date(s.check_out_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '...'}
+                                  {s.check_in_at ? new Intl.DateTimeFormat('en-US', {hour: '2-digit', minute:'2-digit', timeZone: 'Asia/Dhaka'}).format(new Date(s.check_in_at)) : 'N/A'} → {s.check_out_at ? new Intl.DateTimeFormat('en-US', {hour: '2-digit', minute:'2-digit', timeZone: 'Asia/Dhaka'}).format(new Date(s.check_out_at)) : '...'}
                                 </span>
                                 <CorrectionTrigger
                                   attendance={s}
