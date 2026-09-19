@@ -23,7 +23,16 @@ interface AttendanceCorrectionModalProps {
   employeeName: string;
 }
 
-function SubmitButton({ label }: { label: string }) {
+  const formatToDhakaTime = (dateStr: string) => {
+    return new Intl.DateTimeFormat('en-GB', {
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: 'Asia/Dhaka',
+      hour12: false,
+    }).format(new Date(dateStr));
+  };
+
+  function SubmitButton({ label }: { label: string }) {
   const { pending } = useFormStatus();
   return (
     <Button type="submit" isLoading={pending}>
@@ -77,7 +86,7 @@ export function AttendanceCorrectionModal({
                 id="checkIn"
                 name="checkIn"
                 type="time"
-                defaultValue={attendance?.check_in_at ? new Date(attendance.check_in_at).toTimeString().slice(0, 5) : ""}
+                defaultValue={attendance?.check_in_at ? formatToDhakaTime(attendance.check_in_at) : ""}
               />
             </Field>
             <Field label="Check-out Time" htmlFor="checkOut">
@@ -85,7 +94,7 @@ export function AttendanceCorrectionModal({
                 id="checkOut"
                 name="checkOut"
                 type="time"
-                defaultValue={attendance?.check_out_at ? new Date(attendance.check_out_at).toTimeString().slice(0, 5) : ""}
+                defaultValue={attendance?.check_out_at ? formatToDhakaTime(attendance.check_out_at) : ""}
               />
             </Field>
           </div>

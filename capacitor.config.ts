@@ -3,14 +3,17 @@ import dotenv from 'dotenv';
 
 dotenv.config({ path: '.env.local' });
 
+const capacitorUrl = process.env.CAPACITOR_URL || 'http://localhost:3000';
+const isHttps = capacitorUrl.startsWith('https');
+
 const config: CapacitorConfig = {
   appId: 'com.shozibur.stampkini',
   appName: 'Stamp Kini',
   webDir: 'public',
   server: {
-    url: 'http://localhost:3000',
-    cleartext: true,
-    allowNavigation: ['http://localhost:3000', '*.supabase.co'],
+    url: capacitorUrl,
+    cleartext: !isHttps,
+    allowNavigation: [capacitorUrl, '*.supabase.co'],
   },
 };
 
