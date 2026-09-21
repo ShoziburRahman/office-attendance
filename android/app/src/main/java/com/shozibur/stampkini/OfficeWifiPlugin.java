@@ -14,29 +14,37 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import androidx.core.app.ActivityCompat;
 
-@CapacitorPlugin(name = "AndroidWifi")
-public class AndroidWifiPlugin extends Plugin {
+@CapacitorPlugin(name = "OfficeWifi")
+public class OfficeWifiPlugin extends Plugin {
+
+    @PluginMethod
+    public void ping(PluginCall call) {
+        Log.d("WifiBridge", "[OFFICE_WIFI_PLUGIN] ping() called");
+        JSObject result = new JSObject();
+        result.put("status", "alive");
+        call.resolve(result);
+    }
 
     @PluginMethod
     public void getWifiInfo(PluginCall call) {
-        Log.d("WifiBridge", "[ANDROID_WIFI_PLUGIN] METHOD EXECUTED v1");
+        Log.d("WifiBridge", "[OFFICE_WIFI_PLUGIN] METHOD EXECUTED v1");
 
         try {
             Context context = getContext();
 
             // 1. Permission Check
             boolean hasPermission = ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
-            Log.d("WifiBridge", "[ANDROID_WIFI_PLUGIN] permission status: " + (hasPermission ? "GRANTED" : "DENIED"));
+            Log.d("WifiBridge", "[OFFICE_WIFI_PLUGIN] permission status: " + (hasPermission ? "GRANTED" : "DENIED"));
 
             if (!hasPermission) {
-                Log.d("WifiBridge", "[ANDROID_WIFI_PLUGIN] Permission denied, rejecting call");
+                Log.d("WifiBridge", "[OFFICE_WIFI_PLUGIN] Permission denied, rejecting call");
                 call.reject("Wi-Fi permission is required to verify the office network.");
                 return;
             }
 
             // 2. WifiManager Access
             WifiManager wifiManager = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
-            Log.d("WifiBridge", "[ANDROID_WIFI_PLUGIN] WifiManager available: " + (wifiManager != null));
+            Log.d("WifiBridge", "[OFFICE_WIFI_PLUGIN] WifiManager available: " + (wifiManager != null));
             if (wifiManager == null) {
                 call.reject("WifiManager not available");
                 return;
@@ -44,7 +52,7 @@ public class AndroidWifiPlugin extends Plugin {
 
             // 3. WifiInfo Retrieval
             WifiInfo info = wifiManager.getConnectionInfo();
-            Log.d("WifiBridge", "[ANDROID_WIFI_PLUGIN] WifiInfo available: " + (info != null));
+            Log.d("WifiBridge", "[OFFICE_WIFI_PLUGIN] WifiInfo available: " + (info != null));
             if (info == null) {
                 JSObject result = new JSObject();
                 result.put("available", false);
@@ -56,15 +64,14 @@ public class AndroidWifiPlugin extends Plugin {
             String ssid = info.getSSID();
             String bssid = info.getBSSID();
 
-            Log.d("WifiBridge", "[ANDROID_WIFI_PLUGIN] SSID available: " + (ssid != null && !ssid.isEmpty()));
-            Log.d("WifiBridge", "[ANDROID_WIFI_PLUGIN] BSSID available: " + (bssid != null && !bssid.isEmpty()));
+            Log.d("WifiBridge", "[OFFICE_WIFI_PLUGIN] SSID available: " + (ssid != null && !ssid.isEmpty()));
+            Log.d("WifiBridge", "[OFFICE_WIFI_PLUGIN] BSSID available: " + (bssid != null && !bssid.isEmpty()));
 
             if (ssid == null) ssid = "";
             if (bssid == null) bssid = "";
 
-            // Handle <unknown ssid> which Android returns when permissions are weird or disconnected
             if (ssid.equalsIgnoreCase("<unknown ssid>") || ssid.isEmpty()) {
-                Log.d("WifiBridge", "[ANDROID_WIFI_PLUGIN] SSID is unknown or empty");
+                Log.d("WifiBridge", "[OFFICE_WIFI_PLUGIN] SSID is unknown or empty");
                 JSObject result = new JSObject();
                 result.put("available", false);
                 result.put("error", "Unknown SSID");
@@ -78,11 +85,11 @@ public class AndroidWifiPlugin extends Plugin {
             result.put("bssid", bssid);
             result.put("available", true);
 
-            Log.d("WifiBridge", "[ANDROID_WIFI_PLUGIN] resolving with SSID: " + ssid);
+            Log.d("WifiBridge", "[OFFICE_WIFI_PLUGIN] resolving with SSID: " + ssid);
             call.resolve(result);
 
         } catch (Exception e) {
-            Log.e("WifiBridge", "[ANDROID_WIFI_PLUGIN] EXCEPTION: " + e.getMessage(), e);
+            Log.e("WifiBridge", "[OFFICE_WIFI_PLUGIN] EXCEPTION: " + e.getMessage(), e);
             call.reject("Native exception: " + e.getMessage());
         }
     }

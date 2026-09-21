@@ -7,10 +7,11 @@ export interface WifiInfo {
 }
 
 interface AndroidWifiPlugin {
+  ping(): Promise<{ status: string }>;
   getWifiInfo(): Promise<{ ssid: string | null; bssid: string | null; available: boolean; error?: string }>;
 }
 
-const AndroidWifi = registerPlugin<AndroidWifiPlugin>('AndroidWifi');
+const AndroidWifi = registerPlugin<AndroidWifiPlugin>('OfficeWifi');
 
 export async function getWifiInfo(): Promise<WifiInfo> {
   // 1. Basic Connectivity Check
@@ -21,7 +22,11 @@ export async function getWifiInfo(): Promise<WifiInfo> {
 
   if (Capacitor.isNativePlatform()) {
     try {
-      console.log('[WIFI DEBUG] Calling Capacitor plugin AndroidWifi.getWifiInfo()...');
+      console.log('[WIFI DEBUG] Testing Capacitor plugin connectivity (ping)...');
+      const pingResult = await AndroidWifi.ping();
+      console.log('[WIFI DEBUG] Plugin ping result:', pingResult);
+
+      console.log('[WIFI DEBUG] Calling Capacitor plugin OfficeWifi.getWifiInfo()...');
       const result = await AndroidWifi.getWifiInfo();
       console.log('[WIFI DEBUG] Plugin result:', result);
 

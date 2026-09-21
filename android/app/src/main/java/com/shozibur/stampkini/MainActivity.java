@@ -34,11 +34,11 @@ public class MainActivity extends BridgeActivity {
         super.onCreate(savedInstanceState);
 
         // Register the proper Capacitor Wi-Fi plugin
-        this.registerPlugin(AndroidWifiPlugin.class);
+        this.registerPlugin(OfficeWifiPlugin.class);
 
         // Inject Biometric interface (keep this until converted to plugin)
         this.getBridge().getWebView().addJavascriptInterface(new BiometricInterface(this), "AndroidBiometric");
-        Log.d("WifiBridge", "AndroidWifi plugin registered and AndroidBiometric interface injected");
+        Log.d("WifiBridge", "OfficeWifi plugin registered and AndroidBiometric interface injected");
     }
 
     public static class BiometricInterface {
