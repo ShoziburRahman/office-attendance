@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useTransition } from "react";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Field, Input } from "@/components/ui/Field";
 import { Badge } from "@/components/ui/Badge";
 import { Dialog } from "@/components/ui/Dialog";
 import Link from "next/link";
-import { getCurrentLocation } from "@/lib/native/location";
+import { getCurrentLocation, type LocationData } from "@/lib/native/location";
 import { getWifiInfo, verifyWifi } from "@/lib/native/wifi";
 import { checkIn, checkOut, requestAdditionalSession, requestWfh, getBiometricChallenge, checkDeviceStatus, fetchMySessions } from "@/app/employee/actions";
 import { format, addMinutes } from "date-fns";
@@ -48,6 +48,8 @@ export function AttendanceDashboard({ initialSessions }: AttendanceDashboardProp
     accuracy: 0,
     distance: 0,
   });
+  const [isPending, startTransition] = useTransition();
+
 
   useEffect(() => {
     async function fetchSettings() {
@@ -136,6 +138,9 @@ export function AttendanceDashboard({ initialSessions }: AttendanceDashboardProp
       const wifiInfo = await getWifiInfo();
       const loc = await getCurrentLocation();
 
+      // If Wi-Fi is missing, we don't block verification here, but it will fail check-in.
+      // The logs in getWifiInfo will show if it was a permission issue.
+
       setVerification({
         wifi: !!wifiInfo.ssid,
         location: true,
@@ -157,11 +162,16 @@ export function AttendanceDashboard({ initialSessions }: AttendanceDashboardProp
     setState("CHECKING_IN");
     setError(null);
 
-    let loc;
+    let loc: LocationData | undefined;
     try {
       loc = await getCurrentLocation();
       const wifiInfo = await getWifiInfo();
-
+      console.log('[WIFI DEBUG] Frontend wifiInfo received:', {
+        ssid: wifiInfo.ssid,
+        bssid: wifiInfo.bssid,
+        type: typeof wifiInfo.ssid,
+        bssidType: typeof wifiInfo.bssid,
+      });
       const { challenge, challengeId, expiresAt } = await getBiometricChallenge("CHECK_IN");
 
       const biometricResult = await (window as any).AndroidBiometric.signChallenge(challenge);
@@ -173,41 +183,58 @@ export function AttendanceDashboard({ initialSessions }: AttendanceDashboardProp
 
       const signature = resultParsed.signature;
 
-      const result = await checkIn({
-        type: selectedType,
-        wifiSsid: wifiInfo.ssid,
-        wifiBssid: wifiInfo.bssid,
-        biometricSignature: signature,
-        challengeId: challengeId,
-        latitude: loc.lat,
-        longitude: loc.lon,
-        locationAccuracy: loc.accuracy,
+      // Wrap the server action in startTransition to prevent
+      // revalidation errors from crashing the page.
+      await startTransition(async () => {
+        if (!loc) {
+          setError("Location data is missing. Please try again.");
+          setState("IDLE");
+          setShowConfirm(false);
+          return;
+        }
+        const resultResponse = await checkIn({
+          type: selectedType,
+          wifiSsid: wifiInfo.ssid,
+          wifiBssid: wifiInfo.bssid,
+          biometricSignature: signature,
+          challengeId: challengeId,
+          latitude: loc.lat,
+          longitude: loc.lon,
+          locationAccuracy: loc.accuracy,
+        });
+
+        if (!resultResponse.success) {
+          const errorMsg = resultResponse.error;
+          const lowerMsg = errorMsg.toLowerCase();
+
+          if (lowerMsg.includes("additional_attendance_approval_required")) {
+            setState("ADDITIONAL_REQUIRED");
+            setError(null);
+          } else if (lowerMsg.includes("work-from-home attendance requires admin permission")) {
+            setState("WFH_APPROVAL_REQUIRED");
+            setError(null);
+          } else if (lowerMsg.includes("gps_accuracy_too_low")) {
+            const threshold = errorMsg.includes(":") ? errorMsg.split(":")[1] : "the required";
+            const currentAccuracy = loc?.accuracy ? `${loc.accuracy.toFixed(1)}m` : "unknown";
+            setError(`GPS accuracy is too low. Please enable precise location and try again.\\n\\nCurrent accuracy: ${currentAccuracy}. Required: ≤${threshold}m.`);
+            setState("IDLE");
+          } else {
+            setError(errorMsg);
+            setState("IDLE");
+          }
+          setShowConfirm(false);
+          return;
+        }
+
+        const result = resultResponse.data;
+        setSessions(prev => [...prev, result]);
+        setState("ACTIVE");
+        setShowConfirm(false);
       });
-
-      setSessions(prev => [...prev, result]);
-      setState("ACTIVE");
-      setShowConfirm(false);
     } catch (e: any) {
-      console.error("Check-in error caught:", e);
-
-      const errorMsg = e?.message || (typeof e === "string" ? e : JSON.stringify(e)) || "An unexpected error occurred.";
-      const lowerMsg = errorMsg.toLowerCase();
-
-      if (lowerMsg.includes("additional_attendance_approval_required")) {
-        setState("ADDITIONAL_REQUIRED");
-        setError(null);
-      } else if (lowerMsg.includes("work-from-home attendance requires admin permission")) {
-        setState("WFH_APPROVAL_REQUIRED");
-        setError(null);
-      } else if (lowerMsg.includes("gps_accuracy_too_low")) {
-        const threshold = errorMsg.includes(":") ? errorMsg.split(":")[1] : "the required";
-        const currentAccuracy = loc?.accuracy ? `${loc.accuracy.toFixed(1)}m` : "unknown";
-        setError(`GPS accuracy is too low. Please enable precise location and try again.\\n\\nCurrent accuracy: ${currentAccuracy}. Required: ≤${threshold}m.`);
-        setState("IDLE");
-      } else {
-        setError(errorMsg);
-        setState("IDLE");
-      }
+      console.error("Check-in unexpected error caught:", e);
+      setError("Something went wrong while processing attendance. Please try again or contact an administrator.");
+      setState("IDLE");
       setShowConfirm(false);
     }
   }
@@ -220,8 +247,9 @@ export function AttendanceDashboard({ initialSessions }: AttendanceDashboardProp
     setError(null);
     setLockError(null);
 
+    let loc: LocationData | undefined;
     try {
-      const loc = await getCurrentLocation();
+      loc = await getCurrentLocation();
       const wifiInfo = await getWifiInfo();
 
       const { challenge, challengeId, expiresAt } = await getBiometricChallenge("CHECK_OUT");
@@ -235,42 +263,56 @@ export function AttendanceDashboard({ initialSessions }: AttendanceDashboardProp
 
       const signature = resultParsed.signature;
 
-      const result = await checkOut({
-        attendanceId: activeSession.id,
-        wifiSsid: wifiInfo.ssid,
-        wifiBssid: wifiInfo.bssid,
-        biometricSignature: signature,
-        challengeId: challengeId,
-        latitude: loc.lat,
-        longitude: loc.lon,
-        locationAccuracy: loc.accuracy,
-      });
-
-      setSessions(prev => prev.map(s => s.id === result.id ? result : s));
-      setState(sessions.some(s => s.id !== result.id && s.attendance_state === "CHECKED_IN") ? "ACTIVE" : "IDLE");
-    } catch (e: any) {
-      const rawError = e?.message || (typeof e === "string" ? e : JSON.stringify(e)) || "";
-      const lowerError = rawError.toLowerCase();
-
-      if (lowerError.includes("lock") || lowerError.includes("minutes before check-out")) {
-        let minMinutes = 240;
-        const match = rawError.match(/\\d+/);
-        if (match) {
-          minMinutes = parseInt(match[0]);
+      await startTransition(async () => {
+        if (!loc) {
+          setError("Location data is missing. Please try again.");
+          setState("ACTIVE");
+          return;
         }
-
-        const allowedTime = addMinutes(new Date(activeSession.check_in_at), minMinutes);
-        const formattedTime = format(allowedTime, "p");
-
-        setLockError({
-          message: `Can't check out before ${formattedTime}. Please talk to your admin.`,
-          time: formattedTime
+        const resultResponse = await checkOut({
+          attendanceId: activeSession.id,
+          wifiSsid: wifiInfo.ssid,
+          wifiBssid: wifiInfo.bssid,
+          biometricSignature: signature,
+          challengeId: challengeId,
+          latitude: loc.lat,
+          longitude: loc.lon,
+          locationAccuracy: loc.accuracy,
         });
-        setState("ACTIVE");
-      } else {
-        setError(rawError);
-        setState("ACTIVE");
-      }
+
+        if (!resultResponse.success) {
+          const rawError = resultResponse.error;
+          const lowerError = rawError.toLowerCase();
+
+          if (lowerError.includes("lock") || lowerError.includes("minutes before check-out")) {
+            let minMinutes = 240;
+            const match = rawError.match(/\\d+/);
+            if (match) {
+              minMinutes = parseInt(match[0]);
+            }
+
+            const allowedTime = addMinutes(new Date(activeSession.check_in_at), minMinutes);
+            const formattedTime = format(allowedTime, "p");
+
+            setLockError({
+              message: `Can't check out before ${formattedTime}. Please talk to your admin.`,
+              time: formattedTime
+            });
+            setState("ACTIVE");
+          } else {
+            setError(rawError);
+            setState("ACTIVE");
+          }
+        } else {
+          const result = resultResponse.data;
+          setSessions(prev => prev.map(s => s.id === result.id ? result : s));
+          setState(sessions.some(s => s.id !== result.id && s.attendance_state === "CHECKED_IN") ? "ACTIVE" : "IDLE");
+        }
+      });
+    } catch (e: any) {
+      console.error("Check-out unexpected error caught:", e);
+      setError("Something went wrong while processing attendance. Please try again or contact an administrator.");
+      setState("ACTIVE");
     }
   }
 

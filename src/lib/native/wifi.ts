@@ -1,10 +1,16 @@
 import { Network } from '@capacitor/network';
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, registerPlugin } from '@capacitor/core';
 
 export interface WifiInfo {
   ssid: string | null;
   bssid: string | null;
 }
+
+interface AndroidWifiPlugin {
+  getWifiInfo(): Promise<{ ssid: string | null; bssid: string | null; available: boolean; error?: string }>;
+}
+
+const AndroidWifi = registerPlugin<AndroidWifiPlugin>('AndroidWifi');
 
 export async function getWifiInfo(): Promise<WifiInfo> {
   // 1. Basic Connectivity Check
@@ -15,30 +21,21 @@ export async function getWifiInfo(): Promise<WifiInfo> {
 
   if (Capacitor.isNativePlatform()) {
     try {
-      // BYPASS CAPACITOR PLUGIN SYSTEM:
-      // We are using a raw JavascriptInterface injected in MainActivity.java
-      const androidWifi = (window as any).AndroidWifi;
+      console.log('[WIFI DEBUG] Calling Capacitor plugin AndroidWifi.getWifiInfo()...');
+      const result = await AndroidWifi.getWifiInfo();
+      console.log('[WIFI DEBUG] Plugin result:', result);
 
-      if (!androidWifi) {
-        console.error('[WIFI DEBUG] Raw bridge AndroidWifi not found in window');
-        return { ssid: null, bssid: null };
-      }
-
-      console.log('[WIFI DEBUG] Raw bridge AndroidWifi found! Calling getWifiInfoJson()...');
-      const jsonResult = androidWifi.getWifiInfoJson();
-      const info = JSON.parse(jsonResult);
-
-      if (info.error) {
-        console.error('[WIFI DEBUG] Native bridge error:', info.error);
+      if (!result.available) {
+        console.error('[WIFI DEBUG] Plugin reported unavailable:', result.error);
         return { ssid: null, bssid: null };
       }
 
       return {
-        ssid: info.ssid || null,
-        bssid: info.bssid || null,
+        ssid: result.ssid,
+        bssid: result.bssid,
       };
     } catch (e) {
-      console.error('Native Wi-Fi raw bridge error:', e);
+      console.error('[WIFI DEBUG] Capacitor plugin call failed:', e);
       return { ssid: null, bssid: null };
     }
   }

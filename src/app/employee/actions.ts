@@ -6,6 +6,10 @@ import { requireUser } from "@/lib/auth/session";
 import crypto from "crypto";
 import type { AttendanceRow as Attendance, AdditionalAttendanceRequestRow as AdditionalAttendanceRequest } from "@/types/database";
 
+export type AttendanceResponse<T> =
+  | { success: true; data: T }
+  | { success: false; error: string };
+
 export async function fetchMySessions(): Promise<Attendance[]> {
   const user = await requireUser();
   const supabase = await createClient();
@@ -51,65 +55,130 @@ export interface CheckOutParams {
  * These replace the AttendanceService to maintain the server/client boundary.
  */
 
-export async function checkIn(params: CheckInParams): Promise<Attendance> {
-  const user = await requireUser();
-  const supabase = await createClient();
+export async function checkIn(params: CheckInParams): Promise<AttendanceResponse<Attendance>> {
+  console.log('[ATTENDANCE HEARTBEAT] checkIn action invoked');
+  try {
+    const user = await requireUser();
+    const supabase = await createClient();
 
-  // Biometric Verification
-  if (params.biometricSignature && params.challengeId) {
-    await verifyBiometricSignature(params.biometricSignature, params.challengeId, "CHECK_IN");
-  } else {
-    // If no biometric, we can't verify identity.
-    throw new Error("Identity verification required. Please use biometric authentication.");
+    console.log(`[WIFI DEBUG] server SSID received: ${params.wifiSsid}, server BSSID received: ${params.wifiBssid}`);
+
+    // Biometric Verification
+    if (params.biometricSignature && params.challengeId) {
+      await verifyBiometricSignature(params.biometricSignature, params.challengeId, "CHECK_IN");
+    } else {
+      return {
+        success: false,
+        error: "Identity verification required. Please use biometric authentication.",
+      };
+    }
+
+    console.log('[WIFI DEBUG] Server Action checkIn received params:', {
+      wifiSsid: params.wifiSsid,
+      wifiBssid: params.wifiBssid,
+      type: params.type,
+    });
+    console.log('[WIFI DEBUG] Calling fn_check_in RPC with:', {
+      p_wifi_ssid: params.wifiSsid,
+      p_wifi_bssid: params.wifiBssid,
+    });
+    const { data, error } = await (supabase as any).rpc('fn_check_in', {
+      p_attendance_type: params.type,
+      p_wifi_ssid: params.wifiSsid,
+      p_wifi_bssid: params.wifiBssid,
+      p_lat: params.latitude,
+      p_lon: params.longitude,
+      p_accuracy: params.locationAccuracy,
+    });
+
+    if (error) {
+      return {
+        success: false,
+        error: error.message || "An unexpected error occurred during check-in.",
+      };
+    }
+    if (!data) {
+      return {
+        success: false,
+        error: "Check-in failed: No record returned.",
+      };
+    }
+
+    revalidatePath("/employee");
+    return { success: true, data };
+  } catch (e: any) {
+    console.error("[ATTENDANCE ERROR] checkIn exception:", e);
+    if (e instanceof Error && (e.message.includes("Identity") || e.message.includes("Biometric"))) {
+       return { success: false, error: e.message };
+    }
+    return {
+      success: false,
+      error: "Something went wrong while processing attendance. Please try again or contact an administrator.",
+    };
   }
-
-  const { data, error } = await (supabase as any).rpc('fn_check_in', {
-    p_attendance_type: params.type,
-    p_wifi_ssid: params.wifiSsid,
-    p_wifi_bssid: params.wifiBssid,
-    p_lat: params.latitude,
-    p_lon: params.longitude,
-    p_accuracy: params.locationAccuracy,
-  });
-
-  if (error) {
-    const message = error.message || "An unexpected error occurred during check-in.";
-    throw new Error(message);
-  }
-  if (!data) throw new Error("Check-in failed: No record returned.");
-
-  revalidatePath("/employee");
-  return data;
 }
 
-export async function checkOut(params: CheckOutParams): Promise<Attendance> {
-  const user = await requireUser();
-  const supabase = await createClient();
+export async function checkOut(params: CheckOutParams): Promise<AttendanceResponse<Attendance>> {
+  console.log('[ATTENDANCE HEARTBEAT] checkOut action invoked');
+  try {
+    const user = await requireUser();
+    const supabase = await createClient();
 
-  // Biometric Verification
-  if (params.biometricSignature && params.challengeId) {
-    await verifyBiometricSignature(params.biometricSignature, params.challengeId, "CHECK_OUT");
-  } else {
-    throw new Error("Identity verification required. Please use biometric authentication.");
+    console.log(`[WIFI DEBUG] server SSID received: ${params.wifiSsid}, server BSSID received: ${params.wifiBssid}`);
+
+    // Biometric Verification
+    if (params.biometricSignature && params.challengeId) {
+      await verifyBiometricSignature(params.biometricSignature, params.challengeId, "CHECK_OUT");
+    } else {
+      return {
+        success: false,
+        error: "Identity verification required. Please use biometric authentication.",
+      };
+    }
+
+    console.log('[WIFI DEBUG] Server Action checkOut received params:', {
+      wifiSsid: params.wifiSsid,
+      wifiBssid: params.wifiBssid,
+      attendanceId: params.attendanceId,
+    });
+    console.log('[WIFI DEBUG] Calling fn_check_out RPC with:', {
+      p_wifi_ssid: params.wifiSsid,
+      p_wifi_bssid: params.wifiBssid,
+    });
+    const { data, error } = await (supabase as any).rpc('fn_check_out', {
+      p_attendance_id: params.attendanceId,
+      p_wifi_ssid: params.wifiSsid,
+      p_wifi_bssid: params.wifiBssid,
+      p_lat: params.latitude,
+      p_lon: params.longitude,
+      p_accuracy: params.locationAccuracy,
+    });
+
+    if (error) {
+      return {
+        success: false,
+        error: error.message || "An unexpected error occurred during check-out.",
+      };
+    }
+    if (!data) {
+      return {
+        success: false,
+        error: "Check-out failed: No record returned.",
+      };
+    }
+
+    revalidatePath("/employee");
+    return { success: true, data };
+  } catch (e: any) {
+    console.error("[ATTENDANCE ERROR] checkOut exception:", e);
+    if (e instanceof Error && (e.message.includes("Identity") || e.message.includes("Biometric"))) {
+       return { success: false, error: e.message };
+    }
+    return {
+      success: false,
+      error: "Something went wrong while processing attendance. Please try again or contact an administrator.",
+    };
   }
-
-  const { data, error } = await (supabase as any).rpc('fn_check_out', {
-    p_attendance_id: params.attendanceId,
-    p_wifi_ssid: params.wifiSsid,
-    p_wifi_bssid: params.wifiBssid,
-    p_lat: params.latitude,
-    p_lon: params.longitude,
-    p_accuracy: params.locationAccuracy,
-  });
-
-  if (error) {
-    const message = error.message || "An unexpected error occurred during check-out.";
-    throw new Error(message);
-  }
-  if (!data) throw new Error("Check-out failed: No record returned.");
-
-  revalidatePath("/employee");
-  return data;
 }
 
 export async function requestAdditionalSession(reason: string): Promise<AdditionalAttendanceRequest> {
