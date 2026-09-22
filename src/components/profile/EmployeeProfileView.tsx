@@ -112,6 +112,12 @@ export function EmployeeProfileView({
             <p className="text-xs uppercase tracking-wider text-ink-400 font-semibold">Status</p>
             <EmployeeStatusBadge isActive={employee.is_active} />
           </div>
+          <div className="flex flex-col">
+            <p className="text-xs uppercase tracking-wider text-ink-400 font-semibold">Biometrics</p>
+            <span className={`text-sm font-medium ${employee.biometric_required ? 'text-ink-900' : 'text-ink-400 italic'}`}>
+              {employee.biometric_required ? 'Required' : 'Disabled by Admin'}
+            </span>
+          </div>
         </div>
       </div>
 
