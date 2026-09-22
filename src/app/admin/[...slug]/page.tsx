@@ -2,6 +2,10 @@ import { Card, CardBody } from "@/components/ui/Card";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 
+export async function generateStaticParams() {
+  return [{ slug: ["coming-soon"] }];
+}
+
 export default function ComingSoonPage() {
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-6">

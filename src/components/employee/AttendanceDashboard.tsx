@@ -8,7 +8,6 @@ import { Badge } from "@/components/ui/Badge";
 import { Dialog } from "@/components/ui/Dialog";
 import Link from "next/link";
 import { getCurrentLocation, type LocationData } from "@/lib/native/location";
-import { getWifiInfo, verifyWifi } from "@/lib/native/wifi";
 import { checkIn, checkOut, requestAdditionalSession, requestWfh, getBiometricChallenge, checkDeviceStatus, fetchMySessions } from "@/app/employee/actions";
 import { format, addMinutes } from "date-fns";
 import type { AttendanceRow as Attendance } from "@/types/database";
@@ -135,14 +134,10 @@ export function AttendanceDashboard({ initialSessions }: AttendanceDashboardProp
         return;
       }
 
-      const wifiInfo = await getWifiInfo();
       const loc = await getCurrentLocation();
 
-      // If Wi-Fi is missing, we don't block verification here, but it will fail check-in.
-      // The logs in getWifiInfo will show if it was a permission issue.
-
       setVerification({
-        wifi: !!wifiInfo.ssid,
+        wifi: true, // Wi-Fi no longer required, set to true to satisfy UI/state
         location: true,
         accuracy: loc.accuracy,
         distance: 0,
@@ -165,13 +160,6 @@ export function AttendanceDashboard({ initialSessions }: AttendanceDashboardProp
     let loc: LocationData | undefined;
     try {
       loc = await getCurrentLocation();
-      const wifiInfo = await getWifiInfo();
-      console.log('[WIFI DEBUG] Frontend wifiInfo received:', {
-        ssid: wifiInfo.ssid,
-        bssid: wifiInfo.bssid,
-        type: typeof wifiInfo.ssid,
-        bssidType: typeof wifiInfo.bssid,
-      });
       const { challenge, challengeId, expiresAt } = await getBiometricChallenge("CHECK_IN");
 
       const biometricResult = await (window as any).AndroidBiometric.signChallenge(challenge);
@@ -183,8 +171,6 @@ export function AttendanceDashboard({ initialSessions }: AttendanceDashboardProp
 
       const signature = resultParsed.signature;
 
-      // Wrap the server action in startTransition to prevent
-      // revalidation errors from crashing the page.
       await startTransition(async () => {
         if (!loc) {
           setError("Location data is missing. Please try again.");
@@ -194,8 +180,8 @@ export function AttendanceDashboard({ initialSessions }: AttendanceDashboardProp
         }
         const resultResponse = await checkIn({
           type: selectedType,
-          wifiSsid: wifiInfo.ssid,
-          wifiBssid: wifiInfo.bssid,
+          wifiSsid: null,
+          wifiBssid: null,
           biometricSignature: signature,
           challengeId: challengeId,
           latitude: loc.lat,
@@ -250,7 +236,7 @@ export function AttendanceDashboard({ initialSessions }: AttendanceDashboardProp
     let loc: LocationData | undefined;
     try {
       loc = await getCurrentLocation();
-      const wifiInfo = await getWifiInfo();
+      const wifiInfo = { ssid: null, bssid: null };
 
       const { challenge, challengeId, expiresAt } = await getBiometricChallenge("CHECK_OUT");
 

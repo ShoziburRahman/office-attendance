@@ -9,7 +9,7 @@ const isHttps = capacitorUrl.startsWith('https');
 const config: CapacitorConfig = {
   appId: 'com.shozibur.stampkini',
   appName: 'Stamp Kini',
-  webDir: 'public',
+  webDir: 'out',
   server: {
     url: capacitorUrl,
     cleartext: !isHttps,
