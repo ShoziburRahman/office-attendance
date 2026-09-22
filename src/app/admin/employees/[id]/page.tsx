@@ -1,6 +1,10 @@
 import { EmployeeProfileClient } from "@/components/employees/EmployeeProfileClient";
 import { createClient } from "@/lib/supabase/server";
 
+export async function generateStaticParams() {
+  return [{ id: "placeholder" }];
+}
+
 interface EmployeeProfilePageProps {
   params: Promise<{ id: string }>;
 }

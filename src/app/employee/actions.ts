@@ -61,7 +61,7 @@ export async function checkIn(params: CheckInParams): Promise<AttendanceResponse
     const user = await requireUser();
     const supabase = await createClient();
 
-    console.log(`[WIFI DEBUG] server SSID received: ${params.wifiSsid}, server BSSID received: ${params.wifiBssid}`);
+    console.log(`[ATTENDANCE] checkIn action invoked for ${params.type}`);
 
     // Biometric Verification
     if (params.biometricSignature && params.challengeId) {
@@ -73,19 +73,10 @@ export async function checkIn(params: CheckInParams): Promise<AttendanceResponse
       };
     }
 
-    console.log('[WIFI DEBUG] Server Action checkIn received params:', {
-      wifiSsid: params.wifiSsid,
-      wifiBssid: params.wifiBssid,
-      type: params.type,
-    });
-    console.log('[WIFI DEBUG] Calling fn_check_in RPC with:', {
-      p_wifi_ssid: params.wifiSsid,
-      p_wifi_bssid: params.wifiBssid,
-    });
     const { data, error } = await (supabase as any).rpc('fn_check_in', {
       p_attendance_type: params.type,
-      p_wifi_ssid: params.wifiSsid,
-      p_wifi_bssid: params.wifiBssid,
+      p_wifi_ssid: null,
+      p_wifi_bssid: null,
       p_lat: params.latitude,
       p_lon: params.longitude,
       p_accuracy: params.locationAccuracy,
@@ -124,7 +115,7 @@ export async function checkOut(params: CheckOutParams): Promise<AttendanceRespon
     const user = await requireUser();
     const supabase = await createClient();
 
-    console.log(`[WIFI DEBUG] server SSID received: ${params.wifiSsid}, server BSSID received: ${params.wifiBssid}`);
+    console.log(`[ATTENDANCE] checkOut action invoked for ${params.attendanceId}`);
 
     // Biometric Verification
     if (params.biometricSignature && params.challengeId) {
@@ -136,19 +127,10 @@ export async function checkOut(params: CheckOutParams): Promise<AttendanceRespon
       };
     }
 
-    console.log('[WIFI DEBUG] Server Action checkOut received params:', {
-      wifiSsid: params.wifiSsid,
-      wifiBssid: params.wifiBssid,
-      attendanceId: params.attendanceId,
-    });
-    console.log('[WIFI DEBUG] Calling fn_check_out RPC with:', {
-      p_wifi_ssid: params.wifiSsid,
-      p_wifi_bssid: params.wifiBssid,
-    });
     const { data, error } = await (supabase as any).rpc('fn_check_out', {
       p_attendance_id: params.attendanceId,
-      p_wifi_ssid: params.wifiSsid,
-      p_wifi_bssid: params.wifiBssid,
+      p_wifi_ssid: null,
+      p_wifi_bssid: null,
       p_lat: params.latitude,
       p_lon: params.longitude,
       p_accuracy: params.locationAccuracy,

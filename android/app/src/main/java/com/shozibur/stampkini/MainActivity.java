@@ -34,7 +34,15 @@ public class MainActivity extends BridgeActivity {
         super.onCreate(savedInstanceState);
 
         // Register the proper Capacitor Wi-Fi plugin
-        this.registerPlugin(OfficeWifiPlugin.class);
+        Log.d("WifiBridge", "OfficeWifi plugin registration started...");
+        try {
+            // The plugin is no longer needed as we are removing Wi-Fi verification
+            Log.d("WifiBridge", "OfficeWifi plugin registration skipped (Wi-Fi verification removed)");
+        } catch (Exception e) {
+            Log.e("WifiBridge", "Failed to register OfficeWifi plugin: " + e.getMessage(), e);
+        }
+
+
 
         // Inject Biometric interface (keep this until converted to plugin)
         this.getBridge().getWebView().addJavascriptInterface(new BiometricInterface(this), "AndroidBiometric");
