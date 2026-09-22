@@ -9,18 +9,26 @@ import { Dialog } from "@/components/ui/Dialog";
 import Link from "next/link";
 import { getCurrentLocation, type LocationData } from "@/lib/native/location";
 import { checkIn, checkOut, requestAdditionalSession, requestWfh, getBiometricChallenge, checkDeviceStatus, fetchMySessions } from "@/app/employee/actions";
-import { format, addMinutes } from "date-fns";
-import type { AttendanceRow as Attendance } from "@/types/database";
+import { format, addMinutes, isAfter } from "date-fns";
+import type { AttendanceRow as Attendance, EmployeeScheduleRow } from "@/types/database";
 import { createClient } from "@/lib/supabase/client";
+import {
+  requestNotificationPermissions,
+  scheduleCheckoutReminders,
+  cancelCheckoutReminders,
+  reconcileCheckoutReminders,
+  calculateShiftEnd
+} from "@/lib/notification-service";
 
 type AppState = "IDLE" | "VERIFYING" | "CHECKING_IN" | "ACTIVE" | "CHECKING_OUT" | "ADDITIONAL_REQUIRED" | "WFH_APPROVAL_REQUIRED" | "ERROR";
 type AttendanceType = "OFFICE" | "WORK_FROM_HOME";
 
 interface AttendanceDashboardProps {
   initialSessions: Attendance[];
+  schedule?: EmployeeScheduleRow;
 }
 
-export function AttendanceDashboard({ initialSessions }: AttendanceDashboardProps) {
+export function AttendanceDashboard({ initialSessions, schedule }: AttendanceDashboardProps) {
   const [sessions, setSessions] = useState<Attendance[]>(initialSessions);
   const [state, setState] = useState<AppState>(
     sessions.some(s => s.attendance_state === "CHECKED_IN") ? "ACTIVE" : "IDLE"
@@ -49,6 +57,19 @@ export function AttendanceDashboard({ initialSessions }: AttendanceDashboardProp
   });
   const [isPending, startTransition] = useTransition();
 
+
+  useEffect(() => {
+    async function setupNotifications() {
+      const activeSession = sessions.find(s => s.attendance_state === "CHECKED_IN");
+      if (activeSession && schedule) {
+        await requestNotificationPermissions();
+        await reconcileCheckoutReminders(activeSession, schedule);
+      } else {
+        await cancelCheckoutReminders();
+      }
+    }
+    setupNotifications();
+  }, [sessions, schedule]);
 
   useEffect(() => {
     async function fetchSettings() {
@@ -216,6 +237,12 @@ export function AttendanceDashboard({ initialSessions }: AttendanceDashboardProp
         setSessions(prev => [...prev, result]);
         setState("ACTIVE");
         setShowConfirm(false);
+
+        // Schedule checkout reminders upon successful check-in
+        if (schedule) {
+          await requestNotificationPermissions();
+          await scheduleCheckoutReminders(schedule);
+        }
       });
     } catch (e: any) {
       console.error("Check-in unexpected error caught:", e);
@@ -293,6 +320,9 @@ export function AttendanceDashboard({ initialSessions }: AttendanceDashboardProp
           const result = resultResponse.data;
           setSessions(prev => prev.map(s => s.id === result.id ? result : s));
           setState(sessions.some(s => s.id !== result.id && s.attendance_state === "CHECKED_IN") ? "ACTIVE" : "IDLE");
+
+          // Cancel checkout reminders upon successful check-out
+          await cancelCheckoutReminders();
         }
       });
     } catch (e: any) {
@@ -359,6 +389,9 @@ export function AttendanceDashboard({ initialSessions }: AttendanceDashboardProp
     ? format(addMinutes(new Date(activeSession.check_in_at), minMinutes), "p")
     : "";
 
+  const shiftEnd = schedule ? calculateShiftEnd(schedule.end_time) : null;
+  const isShiftEnded = shiftEnd && isAfter(currentTime, shiftEnd);
+
   return (
     <div
       className="space-y-6 relative overflow-hidden"
@@ -394,6 +427,16 @@ export function AttendanceDashboard({ initialSessions }: AttendanceDashboardProp
             <Button variant="secondary" size="sm">My Profile</Button>
           </Link>
         </div>
+
+        {isShiftEnded && state === "ACTIVE" && (
+          <div className="mt-4 rounded-md bg-red-50 border border-red-100 p-3 flex items-center gap-3 text-red-800">
+            <div className="bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold shrink-0">!</div>
+            <div className="flex flex-col">
+              <p className="text-xs font-bold">Checkout Required</p>
+              <p className="text-[11px]">Your shift ended at {shiftEnd ? format(shiftEnd, "p") : "scheduled time"}. Please check out now.</p>
+            </div>
+          </div>
+        )}
         <Card className="mt-6">
           <CardHeader>
             <p className="text-sm font-medium text-ink-900">Attendance</p>

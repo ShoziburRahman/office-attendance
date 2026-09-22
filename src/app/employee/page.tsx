@@ -68,7 +68,10 @@ export default async function EmployeeTodayPage() {
         <p className="mt-1 text-sm text-ink-400">{formatDate(today)}</p>
       </div>
 
-      <AttendanceDashboard initialSessions={sessions} />
+      <AttendanceDashboard
+        initialSessions={sessions}
+        schedule={schedule}
+      />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Card>
