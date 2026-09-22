@@ -19,7 +19,7 @@ export default async function EmployeeTodayPage() {
 
   const supabase = await createClient();
 
-  const [sessionsRes, scheduleRes, weeklyOffRes] = await Promise.all([
+  const [sessionsRes, scheduleRes, weeklyOffRes, employeeRes] = await Promise.all([
     supabase
       .from("attendance")
       .select("*")
@@ -40,11 +40,17 @@ export default async function EmployeeTodayPage() {
       .lte("effective_from", today)
       .or(`effective_until.is.null,effective_until.gte.${today}`)
       .maybeSingle(),
+    supabase
+      .from("employees")
+      .select("biometric_required")
+      .eq("id", user.authId)
+      .single(),
   ]);
 
   const sessions = sessionsRes.data || [];
   const schedule = scheduleRes.data as any;
   const weeklyOff = weeklyOffRes.data as any;
+  const employee = employeeRes.data as any;
 
   // Calculate next weekly off date
   let nextWeeklyOffStr = null;
@@ -71,7 +77,7 @@ export default async function EmployeeTodayPage() {
       <AttendanceDashboard
         initialSessions={sessions}
         schedule={schedule}
-        biometricRequired={schedule?.biometric_required ?? true}
+        biometricRequired={employee?.biometric_required ?? true}
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
