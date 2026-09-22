@@ -60,6 +60,18 @@ export function AttendanceDashboard({ initialSessions, schedule, biometricRequir
 
 
   useEffect(() => {
+    async function syncState() {
+      await handleRefresh();
+    }
+    syncState();
+  }, []);
+
+  useEffect(() => {
+    const activeSession = sessions.find(s => s.attendance_state === "CHECKED_IN");
+    setState(activeSession ? "ACTIVE" : "IDLE");
+  }, [sessions]);
+
+  useEffect(() => {
     async function setupNotifications() {
       const activeSession = sessions.find(s => s.attendance_state === "CHECKED_IN");
       if (activeSession && schedule) {
