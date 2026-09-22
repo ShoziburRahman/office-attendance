@@ -26,9 +26,10 @@ type AttendanceType = "OFFICE" | "WORK_FROM_HOME";
 interface AttendanceDashboardProps {
   initialSessions: Attendance[];
   schedule?: EmployeeScheduleRow;
+  biometricRequired?: boolean;
 }
 
-export function AttendanceDashboard({ initialSessions, schedule }: AttendanceDashboardProps) {
+export function AttendanceDashboard({ initialSessions, schedule, biometricRequired = true }: AttendanceDashboardProps) {
   const [sessions, setSessions] = useState<Attendance[]>(initialSessions);
   const [state, setState] = useState<AppState>(
     sessions.some(s => s.attendance_state === "CHECKED_IN") ? "ACTIVE" : "IDLE"
@@ -181,16 +182,22 @@ export function AttendanceDashboard({ initialSessions, schedule }: AttendanceDas
     let loc: LocationData | undefined;
     try {
       loc = await getCurrentLocation();
-      const { challenge, challengeId, expiresAt } = await getBiometricChallenge("CHECK_IN");
 
-      const biometricResult = await (window as any).AndroidBiometric.signChallenge(challenge);
-      const resultParsed = JSON.parse(biometricResult);
+      let signature = null;
+      let challengeId = null;
 
-      if (resultParsed.error) {
-        throw new Error(resultParsed.error);
+      if (biometricRequired) {
+        const { challenge, challengeId: cId, expiresAt } = await getBiometricChallenge("CHECK_IN");
+        const biometricResult = await (window as any).AndroidBiometric.signChallenge(challenge);
+        const resultParsed = JSON.parse(biometricResult);
+
+        if (resultParsed.error) {
+          throw new Error(resultParsed.error);
+        }
+
+        signature = resultParsed.signature;
+        challengeId = cId;
       }
-
-      const signature = resultParsed.signature;
 
       await startTransition(async () => {
         if (!loc) {
@@ -203,8 +210,8 @@ export function AttendanceDashboard({ initialSessions, schedule }: AttendanceDas
           type: selectedType,
           wifiSsid: null,
           wifiBssid: null,
-          biometricSignature: signature,
-          challengeId: challengeId,
+          biometricSignature: signature || undefined,
+          challengeId: challengeId || undefined,
           latitude: loc.lat,
           longitude: loc.lon,
           locationAccuracy: loc.accuracy,
@@ -263,18 +270,24 @@ export function AttendanceDashboard({ initialSessions, schedule }: AttendanceDas
     let loc: LocationData | undefined;
     try {
       loc = await getCurrentLocation();
-      const wifiInfo = { ssid: null, bssid: null };
 
-      const { challenge, challengeId, expiresAt } = await getBiometricChallenge("CHECK_OUT");
+      let signature = null;
+      let challengeId = null;
 
-      const biometricResult = await (window as any).AndroidBiometric.signChallenge(challenge);
-      const resultParsed = JSON.parse(biometricResult);
+      if (biometricRequired) {
+        const { challenge, challengeId: cId, expiresAt } = await getBiometricChallenge("CHECK_OUT");
+        const biometricResult = await (window as any).AndroidBiometric.signChallenge(challenge);
+        const resultParsed = JSON.parse(biometricResult);
 
-      if (resultParsed.error) {
-        throw new Error(resultParsed.error);
+        if (resultParsed.error) {
+          throw new Error(resultParsed.error);
+        }
+
+        signature = resultParsed.signature;
+        challengeId = cId;
       }
 
-      const signature = resultParsed.signature;
+      const wifiInfo = { ssid: null, bssid: null };
 
       await startTransition(async () => {
         if (!loc) {
@@ -286,8 +299,8 @@ export function AttendanceDashboard({ initialSessions, schedule }: AttendanceDas
           attendanceId: activeSession.id,
           wifiSsid: wifiInfo.ssid,
           wifiBssid: wifiInfo.bssid,
-          biometricSignature: signature,
-          challengeId: challengeId,
+          biometricSignature: signature || undefined,
+          challengeId: challengeId || undefined,
           latitude: loc.lat,
           longitude: loc.lon,
           locationAccuracy: loc.accuracy,

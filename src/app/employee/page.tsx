@@ -71,6 +71,7 @@ export default async function EmployeeTodayPage() {
       <AttendanceDashboard
         initialSessions={sessions}
         schedule={schedule}
+        biometricRequired={schedule?.biometric_required ?? true}
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

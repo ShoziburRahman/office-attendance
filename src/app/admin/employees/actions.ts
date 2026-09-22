@@ -33,6 +33,7 @@ function readEmployeeForm(formData: FormData): EmployeeFormInput & { avatarFile?
     position: String(formData.get("position") ?? "").trim(),
     joiningDate: String(formData.get("joiningDate") ?? ""),
     allowMultipleSessions: formData.get("allowMultipleSessions") === "on",
+    biometricRequired: formData.get("biometricRequired") === "on",
     baseSalary: String(formData.get("baseSalary") ?? "").trim(),
     avatarFile: avatar instanceof File ? avatar : undefined,
   };
@@ -127,6 +128,7 @@ export async function createEmployee(
     position: input.position,
     joining_date: input.joiningDate,
     allow_multiple_sessions: input.allowMultipleSessions,
+    biometric_required: input.biometricRequired,
     base_salary: input.baseSalary ? parseFloat(input.baseSalary) : null,
   });
 
@@ -212,6 +214,7 @@ export async function updateEmployee(
       position: input.position,
       joining_date: input.joiningDate,
       allow_multiple_sessions: input.allowMultipleSessions,
+      biometric_required: input.biometricRequired,
       base_salary: input.baseSalary ? parseFloat(input.baseSalary) : null,
     })
     .eq("id", employeeId);

@@ -63,14 +63,25 @@ export async function checkIn(params: CheckInParams): Promise<AttendanceResponse
 
     console.log(`[ATTENDANCE] checkIn action invoked for ${params.type}`);
 
+    // Fetch employee's biometric requirement
+    const { data: empData } = await (supabase as any)
+      .from("employees")
+      .select("biometric_required")
+      .eq("id", user.authId)
+      .single();
+
+    const isBiometricRequired = empData?.biometric_required ?? true;
+
     // Biometric Verification
-    if (params.biometricSignature && params.challengeId) {
-      await verifyBiometricSignature(params.biometricSignature, params.challengeId, "CHECK_IN");
-    } else {
-      return {
-        success: false,
-        error: "Identity verification required. Please use biometric authentication.",
-      };
+    if (isBiometricRequired) {
+      if (params.biometricSignature && params.challengeId) {
+        await verifyBiometricSignature(params.biometricSignature, params.challengeId, "CHECK_IN");
+      } else {
+        return {
+          success: false,
+          error: "Identity verification required. Please use biometric authentication.",
+        };
+      }
     }
 
     const { data, error } = await (supabase as any).rpc('fn_check_in', {
@@ -117,14 +128,25 @@ export async function checkOut(params: CheckOutParams): Promise<AttendanceRespon
 
     console.log(`[ATTENDANCE] checkOut action invoked for ${params.attendanceId}`);
 
+    // Fetch employee's biometric requirement
+    const { data: empData } = await (supabase as any)
+      .from("employees")
+      .select("biometric_required")
+      .eq("id", user.authId)
+      .single();
+
+    const isBiometricRequired = empData?.biometric_required ?? true;
+
     // Biometric Verification
-    if (params.biometricSignature && params.challengeId) {
-      await verifyBiometricSignature(params.biometricSignature, params.challengeId, "CHECK_OUT");
-    } else {
-      return {
-        success: false,
-        error: "Identity verification required. Please use biometric authentication.",
-      };
+    if (isBiometricRequired) {
+      if (params.biometricSignature && params.challengeId) {
+        await verifyBiometricSignature(params.biometricSignature, params.challengeId, "CHECK_OUT");
+      } else {
+        return {
+          success: false,
+          error: "Identity verification required. Please use biometric authentication.",
+        };
+      }
     }
 
     const { data, error } = await (supabase as any).rpc('fn_check_out', {

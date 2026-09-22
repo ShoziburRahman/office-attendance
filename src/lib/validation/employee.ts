@@ -7,6 +7,7 @@ export interface EmployeeFormInput {
   position: string;
   joiningDate: string;
   allowMultipleSessions: boolean;
+  biometricRequired: boolean;
   baseSalary: string;
   avatarFile?: File;
 }

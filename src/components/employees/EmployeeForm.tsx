@@ -144,6 +144,23 @@ export function EmployeeForm({ action, initialState, employee, submitLabel }: Em
         </span>
       </label>
 
+      <label className="flex items-start gap-2 text-sm text-ink-600">
+        <input
+          type="checkbox"
+          name="biometricRequired"
+          defaultChecked={employee?.biometric_required ?? true}
+          className="mt-0.5 h-4 w-4 rounded border-ink-200 text-teal-500 focus:ring-teal-500"
+        />
+        <span>
+          Require Biometric Verification
+          <br />
+          <span className="text-xs text-ink-400">
+            When enabled, this employee must complete biometric verification during check-in and check-out.
+            Disable only when the employee&apos;s device cannot use biometric authentication.
+          </span>
+        </span>
+      </label>
+
       <div>
         <SubmitButton label={submitLabel} />
       </div>
