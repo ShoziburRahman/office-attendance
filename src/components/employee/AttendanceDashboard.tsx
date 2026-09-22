@@ -232,6 +232,11 @@ export function AttendanceDashboard({ initialSessions, schedule, biometricRequir
             const currentAccuracy = loc?.accuracy ? `${loc.accuracy.toFixed(1)}m` : "unknown";
             setError(`GPS accuracy is too low. Please enable precise location and try again.\\n\\nCurrent accuracy: ${currentAccuracy}. Required: ≤${threshold}m.`);
             setState("IDLE");
+          } else if (lowerMsg.includes("already have an active session")) {
+            // Recover UI from stale state if backend says we are already checked in
+            await handleRefresh();
+            setState("ACTIVE");
+            setError(errorMsg);
           } else {
             setError(errorMsg);
             setState("IDLE");
@@ -240,8 +245,8 @@ export function AttendanceDashboard({ initialSessions, schedule, biometricRequir
           return;
         }
 
-        const result = resultResponse.data;
-        setSessions(prev => [...prev, result]);
+        // SUCCESS: Refresh the full session list to ensure state is derived from DB
+        await handleRefresh();
         setState("ACTIVE");
         setShowConfirm(false);
 
