@@ -16,6 +16,22 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              if ('serviceWorker' in navigator) {
+                window.addEventListener('load', () => {
+                  navigator.serviceWorker.register('/sw.js').then(
+                    (reg) => console.log('SW registered', reg),
+                    (err) => console.log('SW registration failed', err)
+                  );
+                });
+              }
+            `,
+          }}
+        />
+      </head>
       <body className="font-sans flex flex-col min-h-screen">
         <AuthProvider>
           <main className="flex-grow">
@@ -27,7 +43,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             href="https://www.linkedin.com/in/shoziburr/"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-xs font-bold text-teal-600 hover:text-teal-700 transition-colors duration-200"
+            className="text-xs font-bold text-teal-600 hover:teal-700 transition-colors duration-200"
           >
             Developed by Shozibur Rahman
           </a>
