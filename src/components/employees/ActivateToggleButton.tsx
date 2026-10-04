@@ -14,7 +14,9 @@ export function ActivateToggleButton({
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  function handleClick() {
+  function handleClick(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
     setError(null);
     startTransition(async () => {
       try {
@@ -30,7 +32,7 @@ export function ActivateToggleButton({
       <Button
         variant={isActive ? "danger" : "primary"}
         size="md"
-        onClick={handleClick}
+        onClick={(e) => handleClick(e)}
         isLoading={isPending}
       >
         {isActive ? "Deactivate employee" : "Reactivate employee"}

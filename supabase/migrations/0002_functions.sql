@@ -183,6 +183,10 @@ begin
     raise exception 'Only active employees may check in';
   end if;
 
+  -- Get grace period from settings
+  select late_grace_minutes into v_grace_minutes from office_settings limit 1;
+  v_grace_minutes := coalesce(v_grace_minutes, 0);
+
   -- No existing active session anywhere (enforced again by the unique index,
   -- this just gives a clean error instead of a constraint-violation)
   if exists (select 1 from attendance where employee_id = v_employee_id and check_out_at is null) then
@@ -297,7 +301,7 @@ begin
                              at time zone (select office_timezone from office_settings limit 1);
       v_late := greatest(0, extract(epoch from (v_now - v_scheduled_checkin)) / 60)::int;
       update attendance
-        set late_minutes = v_late, is_late = (v_late > 0)
+        set late_minutes = v_late, is_late = (v_late > v_grace_minutes)
         where id = v_row.id
         returning * into v_row;
     end;

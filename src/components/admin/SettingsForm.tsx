@@ -86,6 +86,16 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
         />
       </Field>
 
+      <Field label="Late Grace Period (minutes)" htmlFor="late_grace_minutes" required>
+        <Input
+          id="late_grace_minutes"
+          name="late_grace_minutes"
+          type="number"
+          defaultValue={s.late_grace_minutes}
+          required
+        />
+      </Field>
+
       <div className="sm:col-span-2 border-t border-ink-100 pt-6 mt-2">
         <h4 className="text-sm font-medium text-ink-900 mb-4">Employee Leave Settings</h4>
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">

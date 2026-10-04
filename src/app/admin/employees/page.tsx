@@ -4,6 +4,7 @@ import { Card, CardBody } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Field";
 import { EmployeeStatusBadge } from "@/components/employees/EmployeeStatusBadge";
+import { ActivateToggleButton } from "@/components/employees/ActivateToggleButton";
 import { Badge } from "@/components/ui/Badge";
 import { initials } from "@/lib/utils/format";
 import type { EmployeeWithProfile } from "@/types/database";
@@ -138,10 +139,13 @@ export default async function EmployeesPage({
                     </div>
 
                     <div className="mt-4 pt-4 border-t border-ink-100 flex items-center justify-between">
-                      <span className="text-xs text-ink-400">Today's Status:</span>
-                      <Badge tone={statusBadge === 'Checked In' ? 'present' : statusBadge === 'Absent' ? 'late' : 'neutral'}>
-                        {statusBadge}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-ink-400">Today's Status:</span>
+                        <Badge tone={statusBadge === 'Checked In' ? 'present' : statusBadge === 'Absent' ? 'late' : 'neutral'}>
+                          {statusBadge}
+                        </Badge>
+                      </div>
+                      <ActivateToggleButton employeeId={employee.id} isActive={employee.is_active} />
                     </div>
                   </CardBody>
                 </Card>
