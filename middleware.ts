@@ -38,8 +38,9 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
   const isPublicPath = pathname === "/login" || pathname.startsWith("/api/public");
+  const isRootPath = pathname === "/";
 
-  if (!user && !isPublicPath) {
+  if (!user && !isPublicPath && !isRootPath) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("redirectTo", pathname);
     const redirectResponse = NextResponse.redirect(loginUrl);

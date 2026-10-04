@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { AuthProvider } from "@/providers/AuthProvider";
+import { UpdateProvider } from "@/providers/UpdateProvider";
 
 export const metadata: Metadata = {
   title: "Office Attendance",
@@ -33,11 +34,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body className="font-sans flex flex-col min-h-screen">
-        <AuthProvider>
-          <main className="flex-grow">
-            {children}
-          </main>
-        </AuthProvider>
+        <UpdateProvider>
+          <AuthProvider>
+            <main className="flex-grow">
+              {children}
+            </main>
+          </AuthProvider>
+        </UpdateProvider>
         <footer className="py-6 text-center">
           <a
             href="https://www.linkedin.com/in/shoziburr/"
