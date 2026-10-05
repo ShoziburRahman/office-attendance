@@ -16,7 +16,7 @@ export interface UpdateCheckResult {
   isForced: boolean;
 }
 
-const VERSION_CHECK_URL = 'https://attendancekini.netlify.app/api/app-version';
+const VERSION_CHECK_URL = 'https://stampkini.netlify.app/api/app-version';
 
 export async function checkAppUpdate(): Promise<UpdateCheckResult> {
   // Updates are currently disabled.
