@@ -12,7 +12,6 @@ export default async function RootPage() {
     if (!user) {
       // Do NOT redirect to /login here.
       // We return a simple page that allows the client-side AuthProvider to take over.
-      // The AuthProvider will run syncSession() and then redirect if necessary.
       return (
         <div className="flex items-center justify-center min-h-screen bg-white">
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>

@@ -66,7 +66,18 @@ export function UpdateProvider({ children }: { children: React.ReactNode }) {
 
   const handleUpdate = () => {
     if (update.data?.apkUrl) {
-      window.open(update.data.apkUrl, '_blank');
+      console.log("[UpdateProvider] Triggering update download:", update.data.apkUrl);
+
+      // Create a temporary anchor element to trigger a download
+      const link = document.createElement('a');
+      link.href = update.data.apkUrl;
+      link.setAttribute('download', ''); // Suggest download
+      link.setAttribute('target', '_blank');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } else {
+      console.error("[UpdateProvider] No apkUrl available for update");
     }
   };
 
