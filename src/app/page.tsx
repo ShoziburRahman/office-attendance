@@ -10,13 +10,8 @@ export default async function RootPage() {
     console.log(`[RootPage] getUser() result: ${user ? `FOUND (User ID: ${user.authId}, Role: ${user.profile.role})` : "NOT FOUND"}`);
 
     if (!user) {
-      // Do NOT redirect to /login here.
-      // We return a simple page that allows the client-side AuthProvider to take over.
-      return (
-        <div className="flex items-center justify-center min-h-screen bg-white">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
-        </div>
-      );
+      console.log(`[RootPage] No user found -> Redirecting to /login`);
+      redirect("/login");
     }
 
     if (user.profile.role === "ADMIN") {
@@ -28,11 +23,6 @@ export default async function RootPage() {
     }
   } catch (error) {
     console.log(`[RootPage] Error during session check:`, error);
-    // Instead of redirecting to login, show the loading state to let client-side recovery try first
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-white">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
-      </div>
-    );
+    redirect("/login");
   }
 }
