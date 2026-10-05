@@ -65,6 +65,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mb-4"></div>
           <p className="text-lg font-medium text-gray-600">Loading...</p>
         </div>
+      ) : status === 'unauthenticated' && pathname !== "/login" ? (
+        <div className="flex flex-col items-center justify-center min-h-screen bg-white">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mb-4"></div>
+          <p className="text-lg font-medium text-gray-600">Redirecting to login...</p>
+        </div>
       ) : (
         children
       )}
