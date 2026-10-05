@@ -24,30 +24,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     setMounted(true);
     async function initAuth() {
+      // Create a timeout promise that rejects after 8 seconds
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("Auth initialization timed out")), 8000)
+      );
+
       try {
-        console.log("[AuthProvider] Initializing auth flow...");
+        await Promise.race([
+          (async () => {
+            console.log("[AuthProvider] Initializing auth flow...");
 
-        // 1. Attempt to sync session from native storage to cookies
-        const synced = await syncSession();
-        console.log("[AuthProvider] syncSession result:", synced);
+            // 1. Attempt to sync session from native storage to cookies
+            const synced = await syncSession();
+            console.log("[AuthProvider] syncSession result:", synced);
 
-        // 2. Resolve the current user (profile + employee)
-        const currentUser = await getCurrentUser();
-        console.log("[AuthProvider] getCurrentUser result:", currentUser ? "found" : "not found");
+            // 2. Resolve the current user (profile + employee)
+            const currentUser = await getCurrentUser();
+            console.log("[AuthProvider] getCurrentUser result:", currentUser ? "found" : "not found");
 
-        if (currentUser) {
-          setUser(currentUser);
-          setStatus('authenticated');
-        } else {
-          console.warn("[AuthProvider] No user found after sync. Redirecting to login...");
-          setStatus('unauthenticated');
-          // ONLY redirect to login if we are NOT already on the login page
-          if (pathname !== "/login") {
-            router.push("/login");
-          }
-        }
+            if (currentUser) {
+              setUser(currentUser);
+              setStatus('authenticated');
+            } else {
+              console.warn("[AuthProvider] No user found after sync. Redirecting to login...");
+              setStatus('unauthenticated');
+              // ONLY redirect to login if we are NOT already on the login page
+              if (pathname !== "/login") {
+                router.push("/login");
+              }
+            }
+          })(),
+          timeoutPromise,
+        ]);
       } catch (error) {
-        console.error("[AuthProvider] Auth initialization error:", error);
+        if (error instanceof Error && error.message === "Auth initialization timed out") {
+          console.error("[AuthProvider] Critical: Auth initialization timed out after 8s");
+        } else {
+          console.error("[AuthProvider] Auth initialization error:", error);
+        }
         setStatus('unauthenticated');
         if (pathname !== "/login") {
           router.push("/login");
