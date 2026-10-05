@@ -38,8 +38,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               setUser(currentUser);
               setStatus('authenticated');
             } else {
-              setStatus('unauthenticated');
+              // Only set to unauthenticated if we are NOT on the login page
+              // and if we have already mounted to avoid hydration mismatches
               if (pathname !== "/login") {
+                setStatus('unauthenticated');
                 router.push("/login");
               }
             }
@@ -48,8 +50,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         ]);
       } catch (error) {
         console.error("[AuthProvider] Auth error or timeout:", error);
-        setStatus('unauthenticated');
         if (pathname !== "/login") {
+          setStatus('unauthenticated');
           router.push("/login");
         }
       }

@@ -5,7 +5,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: 'Stamp Kini',
     short_name: 'Stamp Kini',
     description: 'Stamp Kini Attendance Management',
-    start_url: '/employee',
+    start_url: '/',
     display: 'standalone',
     scope: '/',
     orientation: 'portrait',
