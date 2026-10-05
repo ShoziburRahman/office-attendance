@@ -2,6 +2,17 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  const isPublicPath = pathname === "/login" || pathname.startsWith("/api/public");
+  const isRootPath = pathname === "/";
+
+  // 1. OPTIMIZATION: Skip heavy auth checks for public and root paths.
+  // This prevents the "Loading..." hang by allowing the page to load instantly.
+  // Client-side AuthProvider will handle the session check and redirects.
+  if (isPublicPath || isRootPath) {
+    return NextResponse.next();
+  }
+
   let response = NextResponse.next({
     request: {
       headers: request.headers,
@@ -32,23 +43,16 @@ export async function middleware(request: NextRequest) {
     }
   );
 
+  // Only perform the heavy server-side check for protected routes
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { pathname } = request.nextUrl;
-  const isPublicPath = pathname === "/login" || pathname.startsWith("/api/public");
-  const isRootPath = pathname === "/";
-
-  // MODIFIED: We no longer redirect to /login if the user is not found on the root path.
-  // This allows the client-side AuthProvider to perform the native storage sync.
-  if (!user && !isPublicPath && !isRootPath) {
+  if (!user) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("redirectTo", pathname);
     const redirectResponse = NextResponse.redirect(loginUrl);
 
-    // CRITICAL: Transfer cookies from the 'response' object (refreshed by Supabase)
-    // to the redirect response.
     response.cookies.getAll().forEach((cookie) => {
       redirectResponse.cookies.set(cookie.name, cookie.value);
     });
@@ -56,7 +60,7 @@ export async function middleware(request: NextRequest) {
     return redirectResponse;
   }
 
-  if (user && pathname === "/login") {
+  if (pathname === "/login") {
     const rootUrl = new URL("/", request.url);
     const redirectResponse = NextResponse.redirect(rootUrl);
 
@@ -67,7 +71,7 @@ export async function middleware(request: NextRequest) {
     return redirectResponse;
   }
 
-  if (user && (pathname.startsWith("/admin") || pathname.startsWith("/employee"))) {
+  if (pathname.startsWith("/admin") || pathname.startsWith("/employee")) {
     const { data: profile } = await supabase
       .from("profiles")
       .select("role")
