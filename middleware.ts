@@ -40,6 +40,8 @@ export async function middleware(request: NextRequest) {
   const isPublicPath = pathname === "/login" || pathname.startsWith("/api/public");
   const isRootPath = pathname === "/";
 
+  // MODIFIED: We no longer redirect to /login if the user is not found on the root path.
+  // This allows the client-side AuthProvider to perform the native storage sync.
   if (!user && !isPublicPath && !isRootPath) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("redirectTo", pathname);

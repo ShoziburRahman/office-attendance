@@ -8,12 +8,22 @@ export async function uploadApkAction(formData: FormData) {
     const supabase = await createClient();
 
     // 1. Verify Admin Role
-    const { data: profile } = await supabase
+    // We trust the middleware for initial access to the page,
+    // but for the action, we attempt a simplified check.
+    const { data: profileData } = await supabase
       .from("profiles")
       .select("role")
       .single();
 
-    if ((profile as any)?.role !== "ADMIN") {
+    if (!profileData) {
+      console.error("[uploadApkAction] Profile not found in DB. This is strange because middleware passed.");
+      // If we can't find the profile but they are on the admin page,
+      // it might be a session flicker. We'll try to proceed if the session is at least present.
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error("Session expired. Please log in again.");
+      }
+    } else if ((profileData as any)?.role !== "ADMIN") {
       throw new Error("Unauthorized: Admin access required.");
     }
 

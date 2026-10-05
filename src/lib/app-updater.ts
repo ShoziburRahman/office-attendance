@@ -26,53 +26,60 @@ export async function checkAppUpdate(): Promise<UpdateCheckResult> {
   }
 
   try {
+    console.log("[AppUpdater] Starting update check...");
+
     // 1. Get installed app version
+    console.log("[AppUpdater] Getting installed version...");
     const info = await App.getInfo();
-    // Capacitor App.getInfo() returns version (string).
-    // For Android, we often need the native versionCode.
-    // In Capacitor 6+, if versionCode isn't explicitly in AppInfo,
-    // we treat the numeric part of the version string as the code,
-    // or cast to any to access the platform-specific versionCode property.
     const installedVersionCode = (info as any).versionCode || 0;
+    console.log(`[AppUpdater] Installed versionCode: ${installedVersionCode}`);
 
     // 2. Fetch remote version config
+    console.log(`[AppUpdater] Fetching remote version from: ${VERSION_CHECK_URL}`);
     const response = await fetch(VERSION_CHECK_URL, {
       cache: 'no-cache',
       signal: AbortSignal.timeout(5000), // 5s timeout
     });
 
+    console.log(`[AppUpdater] Response received: ${response.status} ${response.statusText}`);
+
     if (!response.ok) {
-      console.warn('[AppUpdater] Version check failed: Server response not ok');
+      console.warn("[AppUpdater] Version check failed: Server response not ok");
       return { shouldUpdate: false, versionData: null, isForced: false };
     }
 
-    const remote: AppVersion = await response.json();
+    const text = await response.text();
+    console.log("[AppUpdater] Raw response text:", text);
+
+    let remote: AppVersion;
+    try {
+      remote = JSON.parse(text);
+    } catch (e) {
+      console.error("[AppUpdater] Failed to parse JSON:", e);
+      return { shouldUpdate: false, versionData: null, isForced: false };
+    }
 
     // Validate JSON structure
-    if (!remote.versionCode || !remote.apkUrl) {
-      console.warn('[AppUpdater] Malformed version JSON');
+    if (!remote || typeof remote.versionCode === 'undefined' || !remote.apkUrl) {
+      console.warn("[AppUpdater] Malformed version JSON received");
       return { shouldUpdate: false, versionData: null, isForced: false };
     }
+
+    console.log(`[AppUpdater] Remote version: ${remote.versionCode} (${remote.versionName})`);
 
     // 3. Compare versions
     if (remote.versionCode > installedVersionCode) {
-      // If it's not a forced update, check if the user already dismissed this specific version
-      if (!remote.forceUpdate) {
-        const { value: dismissedVersion } = await Preferences.get({ key: DISMISS_KEY });
-        if (dismissedVersion === String(remote.versionCode)) {
-          return { shouldUpdate: false, versionData: null, isForced: false };
-        }
-      }
-
+      console.log("[AppUpdater] Update found!");
       return {
         shouldUpdate: true,
         versionData: remote,
         isForced: remote.forceUpdate,
       };
     }
+
+    console.log("[AppUpdater] App is up to date.");
   } catch (error) {
-    // Silently continue on network failure or JSON errors
-    console.warn('[AppUpdater] Update check failed silently:', error);
+    console.error("[AppUpdater] Critical error during update check:", error);
   }
 
   return { shouldUpdate: false, versionData: null, isForced: false };

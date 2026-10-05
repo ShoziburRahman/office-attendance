@@ -41,6 +41,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } else {
           console.warn("[AuthProvider] No user found after sync. Redirecting to login...");
           setStatus('unauthenticated');
+          // ONLY redirect to login if we are NOT already on the login page
           if (pathname !== "/login") {
             router.push("/login");
           }
@@ -55,7 +56,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     initAuth();
-  }, [pathname]);
+  }, []); // Removed [pathname] dependency to prevent loop on redirect
 
   return (
     <AuthContext.Provider value={{ user, isLoading: status === 'restoring' }}>

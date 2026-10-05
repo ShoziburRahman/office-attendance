@@ -30,6 +30,7 @@ export function UpdateProvider({ children }: { children: React.ReactNode }) {
   const performUpdateCheck = async () => {
     console.log("[UpdateProvider] Checking for updates...");
     const result = await checkAppUpdate();
+    console.log("[UpdateProvider] Update check result:", result);
     if (result.shouldUpdate) {
       setUpdate({
         available: true,
