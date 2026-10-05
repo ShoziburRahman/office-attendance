@@ -24,21 +24,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     setMounted(true);
     async function initAuth() {
+      // Use a timeout to prevent hanging indefinitely if the network is slow/dead
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("Auth initialization timed out")), 5000)
+      );
+
       try {
         console.log("[AuthProvider] Checking current user...");
-        const currentUser = await getCurrentUser();
-
-        if (currentUser) {
-          setUser(currentUser);
-          setStatus('authenticated');
-        } else {
-          setStatus('unauthenticated');
-          if (pathname !== "/login") {
-            router.push("/login");
-          }
-        }
+        await Promise.race([
+          (async () => {
+            const currentUser = await getCurrentUser();
+            if (currentUser) {
+              setUser(currentUser);
+              setStatus('authenticated');
+            } else {
+              setStatus('unauthenticated');
+              if (pathname !== "/login") {
+                router.push("/login");
+              }
+            }
+          })(),
+          timeoutPromise,
+        ]);
       } catch (error) {
-        console.error("[AuthProvider] Auth error:", error);
+        console.error("[AuthProvider] Auth error or timeout:", error);
         setStatus('unauthenticated');
         if (pathname !== "/login") {
           router.push("/login");
