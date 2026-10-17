@@ -224,7 +224,7 @@ export function EmployeeProfileView({
 
                             <div className="overflow-x-auto">
                               <table className="w-full text-left text-xs">
-                                <thead>
+                                <thead className="text-ink-400 border-b border-ink-100">
                                   <tr className="text-ink-400 border-b border-ink-100">
                                     <th className="pb-2 font-medium">Date</th>
                                     <th className="pb-2 font-medium">Check-in</th>
@@ -232,6 +232,7 @@ export function EmployeeProfileView({
                                     <th className="pb-2 font-medium">Duration</th>
                                     <th className="pb-2 font-medium">Status</th>
                                     <th className="pb-2 font-medium">Late</th>
+                                    <th className="pb-2 font-medium">Reason</th>
                                   </tr>
                                 </thead>
                                 <tbody className="divide-y divide-ink-50">
@@ -251,6 +252,10 @@ export function EmployeeProfileView({
                                         employee.joining_date
                                       );
 
+                                      // Find the record to get the notes
+                                      const record = detailedAttendance.find(a => a.attendance_date === dateStr);
+                                      const reason = record?.notes || '—';
+
                                       return (
                                         <tr key={dateStr} className="hover:bg-white transition-colors">
                                           <td className="py-3 text-ink-900 font-medium">{dateStr}</td>
@@ -263,6 +268,7 @@ export function EmployeeProfileView({
                                             </Badge>
                                           </td>
                                           <td className="py-3 text-ink-600">{statusData.lateMinutes}m</td>
+                                          <td className="py-3 text-ink-400 italic text-[10px]">{reason}</td>
                                         </tr>
                                       );
                                     });

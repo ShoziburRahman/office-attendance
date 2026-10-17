@@ -62,12 +62,12 @@ export async function GET(request: NextRequest) {
       doc.text("Daily Attendance Details", 14, (doc as any).lastAutoTable.finalY + 10);
 
       const tableData = reportData.dailyDetails.map(d => [
-        d.date, d.day, d.status, d.checkIn || "-", d.checkOut || "-", d.duration || "-", d.lateMinutes, d.overtime
+        d.date, d.day, d.status, d.checkIn || "-", d.checkOut || "-", d.duration || "-", d.lateMinutes, d.overtime, d.reason || "-"
       ]);
 
       autoTable(doc, {
         startY: (doc as any).lastAutoTable.finalY + 15,
-        head: [['Date', 'Day', 'Status', 'In', 'Out', 'Dur', 'Late', 'OT']],
+        head: [['Date', 'Day', 'Status', 'In', 'Out', 'Dur', 'Late', 'OT', 'Reason']],
         body: tableData,
         theme: 'grid',
         headStyles: { fillColor: [100, 100, 100] },

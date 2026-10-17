@@ -10,13 +10,14 @@ export function CSVExportButton({ data }: CSVExportButtonProps) {
   const downloadCSV = () => {
     if (data.length === 0) return;
 
-    const headers = ["Employee", "Date", "State", "Overtime (min)", "Status"];
+    const headers = ["Employee", "Date", "State", "Overtime (min)", "Status", "Reason"];
     const rows = data.map((a) => [
       `"${a.employee?.profile?.full_name || "Unknown"}"`,
       a.attendance_date,
       a.attendance_state,
       a.overtime_minutes ?? 0,
       a.is_late ? "Late" : "On Time",
+      `"${a.notes || "—"}"`,
     ]);
 
     const csvContent = [

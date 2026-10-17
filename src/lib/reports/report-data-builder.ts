@@ -38,6 +38,7 @@ export interface MonthlyReportData {
     isWeeklyOff: boolean;
     leaveType: string | null;
     isWfh: boolean;
+    reason: string | null;
   }>;
 }
 
@@ -147,9 +148,12 @@ export async function buildMonthlyReportData(employeeId: string, month: number, 
         break;
     }
 
-    const checkIn = statusData.checkIn ? new Date(statusData.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
-    const checkOut = statusData.checkOut ? new Date(statusData.checkOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
+    const checkIn = statusData.checkIn ? new Date(statusData.checkIn).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Dhaka' }) : null;
+    const checkOut = statusData.checkOut ? new Date(statusData.checkOut).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Dhaka' }) : null;
     const duration = statusData.durationMinutes > 0 ? `${statusData.durationMinutes}m` : null;
+
+    const attendanceRecord = attendanceData.find(a => a.attendance_date === dateStr);
+    const reason = attendanceRecord?.notes || null;
 
     if (statusData.status === 'PRESENT' || statusData.status === 'MISSING_CHECK_OUT') {
       daysWorked++;
@@ -184,6 +188,7 @@ export async function buildMonthlyReportData(employeeId: string, month: number, 
       isWeeklyOff: statusData.isWeeklyOff,
       leaveType: statusData.status === 'PAID_LEAVE' ? 'PAID' : (statusData.status === 'UNPAID_LEAVE' ? 'UNPAID' : null),
       isWfh,
+      reason,
     });
   }
 
