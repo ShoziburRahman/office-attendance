@@ -8,6 +8,11 @@ import { Badge } from "@/components/ui/Badge";
 import type { WeeklyOffActionState } from "@/app/admin/employees/state";
 import type { WeeklyOffScheduleRow } from "@/types/database";
 import { calculateNextWeeklyOff } from "@/lib/utils/weekly-off";
+import { clearAllWeeklyOffs } from "@/app/admin/employees/actions";
+import { toast } from "sonner";
+
+
+
 
 type ActionFn = (prevState: WeeklyOffActionState, formData: FormData) => Promise<WeeklyOffActionState>;
 
@@ -42,6 +47,18 @@ export function EmployeeWeeklyOffSection({ action, initialState, weeklyOffs, emp
   const [state, formAction] = useFormState(action, initialState);
   const errors = state.fieldErrors ?? {};
 
+  const handleClearAll = async () => {
+    if (!confirm("Are you sure you want to delete all weekly off settings for this employee?")) {
+      return;
+    }
+    try {
+      await clearAllWeeklyOffs(employeeId);
+      toast.success("All weekly off settings cleared.");
+    } catch (e: any) {
+      toast.error(e.message || "Failed to clear weekly off settings.");
+    }
+  };
+
   // Calculate the next upcoming off-day using the new logic
   // We use the office date provided by the server to ensure consistency.
   const nextOff = calculateNextWeeklyOff(
@@ -56,8 +73,18 @@ export function EmployeeWeeklyOffSection({ action, initialState, weeklyOffs, emp
 
   return (
     <Card className="mt-6">
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between">
         <p className="text-sm font-medium text-ink-900">Weekly Off</p>
+        {weeklyOffs.length > 0 && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-status-late hover:text-status-late hover:bg-red-50 h-8 px-2 text-xs"
+            onClick={handleClearAll}
+          >
+            Clear All
+          </Button>
+        )}
       </CardHeader>
       <CardBody>
         <div className="mb-6">
@@ -77,31 +104,35 @@ export function EmployeeWeeklyOffSection({ action, initialState, weeklyOffs, emp
         </div>
 
         <div className="border-t border-ink-100 pt-6">
-          <h4 className="text-xs font-semibold uppercase tracking-wider text-ink-400 mb-4">Assign Off-Day</h4>
-          <form action={formAction} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-ink-400 mb-4">Assign Off-Days</h4>
+          <form action={formAction} className="grid grid-cols-1 gap-4">
             {state.error && (
               <p role="alert" className="col-span-full rounded-md bg-red-50 px-3 py-2 text-sm text-status-late">
                 {state.error}
               </p>
             )}
-            <Field label="Day of Week" htmlFor="dayOfWeek" required error={errors.dayOfWeek}>
-              <select
-                id="dayOfWeek"
-                name="dayOfWeek"
-                className="flex h-10 w-full rounded-md border border-ink-200 bg-white px-3 py-2 text-sm ring-offset-white focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2"
-                required
-              >
-                <option value="">Select a day</option>
+            <Field label="Days of Week" htmlFor="dayOfWeek" required error={errors.dayOfWeek}>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 {DAYS.map(day => (
-                  <option key={day.value} value={day.value}>{day.label}</option>
+                  <label key={day.value} className="flex items-center gap-2 cursor-pointer group">
+                    <input
+                      type="checkbox"
+                      name="dayOfWeek"
+                      value={day.value}
+                      className="h-4 w-4 rounded border-ink-200 text-teal-500 focus:ring-teal-500"
+                    />
+                    <span className="text-sm text-ink-900 group-hover:text-teal-600 transition-colors">
+                      {day.label}
+                    </span>
+                  </label>
                 ))}
-              </select>
+              </div>
             </Field>
             <Field label="Effective From" htmlFor="effectiveFrom" required error={errors.effectiveFrom}>
               <Input id="effectiveFrom" name="effectiveFrom" type="date" required />
             </Field>
             <div className="flex items-end">
-              <SubmitButton label="Assign Off-Day" />
+              <SubmitButton label="Assign Off-Days" />
             </div>
           </form>
         </div>

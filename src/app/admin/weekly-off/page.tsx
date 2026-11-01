@@ -59,11 +59,12 @@ export default async function WeeklyOffPage() {
     groupedData[empId].records.push(off);
   });
 
-  const getStatus = (off: any, nextOffId: string | undefined) => {
-    if (off.id === nextOffId) return { label: "Active", tone: "present" as any };
+  const getStatus = (off: any) => {
     if (currentOfficeDate < off.effective_from) return { label: "Future", tone: "neutral" as any };
+    if (!off.effective_until || currentOfficeDate < off.effective_until) return { label: "Active", tone: "present" as any };
     return { label: "Expired", tone: "neutral" as any };
   };
+
 
   Object.keys(groupedData).forEach(empId => {
     const group = groupedData[empId];
@@ -80,8 +81,8 @@ export default async function WeeklyOffPage() {
 
     const priority: Record<string, number> = { "Active": 1, "Future": 2, "Expired": 3 };
     group.records.sort((a: any, b: any) => {
-      const statusA = getStatus(a, activeId).label;
-      const statusB = getStatus(b, activeId).label;
+      const statusA = getStatus(a).label;
+      const statusB = getStatus(b).label;
       if (statusA !== statusB) {
         return (priority[statusA] || 99) - (priority[statusB] || 99);
       }
@@ -89,8 +90,9 @@ export default async function WeeklyOffPage() {
     });
 
     group.records.forEach((r: any) => {
-      r.status = getStatus(r, activeId);
+      r.status = getStatus(r);
     });
+
   });
 
   return (

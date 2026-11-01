@@ -50,8 +50,9 @@ function readScheduleForm(formData: FormData): ScheduleInput {
 }
 
 function readWeeklyOffForm(formData: FormData): WeeklyOffInput {
+  const days = formData.getAll("dayOfWeek");
   return {
-    dayOfWeek: String(formData.get("dayOfWeek") ?? "").trim(),
+    dayOfWeek: days.map(d => String(d).trim()),
     effectiveFrom: String(formData.get("effectiveFrom") ?? "").trim(),
   };
 }
@@ -340,18 +341,27 @@ export async function addWeeklyOff(
 
   const supabase = await createClient();
 
-  const { error: rpcError } = await (supabase as any).rpc("upsert_weekly_off", {
-    p_employee_id: employeeId,
-    p_day_of_week: parseInt(input.dayOfWeek),
-    p_effective_from: input.effectiveFrom,
-    p_created_by: currentUser.authId,
-  });
+  try {
+    const results = await Promise.all(
+      input.dayOfWeek.map(async (day) => {
+        const { error: rpcError } = await (supabase as any).rpc("upsert_weekly_off", {
+          p_employee_id: employeeId,
+          p_day_of_week: parseInt(day),
+          p_effective_from: input.effectiveFrom,
+          p_created_by: currentUser.authId,
+        });
+        if (rpcError) throw rpcError;
+        return true;
+      })
+    );
 
-  if (rpcError) {
-    // Map "Unauthorized" from RPC to a user-friendly error
-    const message = rpcError.message.includes("Unauthorized")
+    if (results.length === 0) {
+      return { error: "No days selected." };
+    }
+  } catch (e: any) {
+    const message = e.message?.includes("Unauthorized")
       ? "Unauthorized."
-      : rpcError.message;
+      : e.message || "An error occurred while saving weekly offs.";
     return { error: message };
   }
 
@@ -373,6 +383,22 @@ export async function removeWeeklyOff(offId: string): Promise<void> {
   if (error) throw new Error(`Could not remove weekly off: ${error.message}`);
   if (!data || data.length === 0) throw new Error("Weekly off record not found or already removed.");
 }
+
+export async function clearAllWeeklyOffs(employeeId: string): Promise<void> {
+  const currentUser = await requireUser();
+  if (currentUser.profile.role !== "ADMIN") throw new Error("Unauthorized.");
+
+  const adminClient = createAdminClient();
+  const { error } = await adminClient
+    .from("weekly_off_schedules")
+    .delete()
+    .eq("employee_id", employeeId);
+
+  if (error) throw new Error(`Could not clear weekly offs: ${error.message}`);
+
+  revalidatePath(`/admin/employees/${employeeId}`);
+}
+
 
 /**
  * Adds a leave entry.

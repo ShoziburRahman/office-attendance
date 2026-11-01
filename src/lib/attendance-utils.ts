@@ -32,9 +32,12 @@ export interface MonthlySummary {
 export interface DailyStatus {
   date: string;
   status: 'PRESENT' | 'ABSENT' | 'PAID_LEAVE' | 'UNPAID_LEAVE' | 'WEEKLY_OFF' | 'MISSING_CHECK_OUT';
-  checkIn: string | null;
-  checkOut: string | null;
-  durationMinutes: number;
+  sessions: Array<{
+    checkIn: string | null;
+    checkOut: string | null;
+    durationMinutes: number;
+  }>;
+  totalDurationMinutes: number;
   lateMinutes: number;
   overtimeMinutes: number;
   isLate: boolean;
@@ -56,11 +59,16 @@ export function calculateDailyStatus(
     return {
       date,
       status: 'ABSENT',
-      checkIn: null, checkOut: null, durationMinutes: 0, lateMinutes: 0, overtimeMinutes: 0, isLate: false, isWeeklyOff: false
+      sessions: [],
+      totalDurationMinutes: 0,
+      lateMinutes: 0,
+      overtimeMinutes: 0,
+      isLate: false,
+      isWeeklyOff: false
     };
   }
 
-  const dayAttendance = attendance.find(a => a.attendance_date === date);
+  const dayAttendances = attendance.filter(a => a.attendance_date === date);
   const dayLeave = leaves.find(l => l.leave_date === date);
   const isWeeklyOff = weeklyOffs.some(wo =>
     wo.day_of_week === dayOfWeek &&
@@ -68,18 +76,29 @@ export function calculateDailyStatus(
     (!wo.effective_until || date < wo.effective_until)
   );
 
-  if (dayAttendance) {
-    const isMissingCheckout = dayAttendance.attendance_state === 'MISSING_CHECK_OUT' || dayAttendance.check_out_at === null;
+  if (dayAttendances.length > 0) {
+    const sessions = dayAttendances.map(a => ({
+      checkIn: a.check_in_at,
+      checkOut: a.check_out_at,
+      durationMinutes: a.total_duration_minutes || 0
+    })).sort((a, b) => (a.checkIn || '') < (b.checkIn || '') ? -1 : 1);
+
+    const totalDuration = dayAttendances.reduce((sum, a) => sum + (a.total_duration_minutes || 0), 0);
+    const totalLate = dayAttendances.reduce((sum, a) => sum + (a.late_minutes || 0), 0);
+    const totalOvertime = dayAttendances.reduce((sum, a) => sum + (a.overtime_minutes || 0), 0);
+    const isAnyLate = dayAttendances.some(a => a.is_late);
+    const isAnyWeeklyOff = dayAttendances.some(a => a.worked_on_weekly_off);
+    const isMissingCheckout = dayAttendances.some(a => a.attendance_state === 'MISSING_CHECK_OUT' || a.check_out_at === null);
+
     return {
       date,
       status: isMissingCheckout ? 'MISSING_CHECK_OUT' : 'PRESENT',
-      checkIn: dayAttendance.check_in_at,
-      checkOut: dayAttendance.check_out_at,
-      durationMinutes: dayAttendance.total_duration_minutes || 0,
-      lateMinutes: dayAttendance.late_minutes || 0,
-      overtimeMinutes: dayAttendance.overtime_minutes || 0,
-      isLate: dayAttendance.is_late,
-      isWeeklyOff: dayAttendance.worked_on_weekly_off
+      sessions,
+      totalDurationMinutes: totalDuration,
+      lateMinutes: totalLate,
+      overtimeMinutes: totalOvertime,
+      isLate: isAnyLate,
+      isWeeklyOff: isAnyWeeklyOff
     };
   }
 
@@ -87,7 +106,12 @@ export function calculateDailyStatus(
     return {
       date,
       status: dayLeave.leave_type === 'PAID' ? 'PAID_LEAVE' : 'UNPAID_LEAVE',
-      checkIn: null, checkOut: null, durationMinutes: 0, lateMinutes: 0, overtimeMinutes: 0, isLate: false, isWeeklyOff: false
+      sessions: [],
+      totalDurationMinutes: 0,
+      lateMinutes: 0,
+      overtimeMinutes: 0,
+      isLate: false,
+      isWeeklyOff: false
     };
   }
 
@@ -95,14 +119,24 @@ export function calculateDailyStatus(
     return {
       date,
       status: 'WEEKLY_OFF',
-      checkIn: null, checkOut: null, durationMinutes: 0, lateMinutes: 0, overtimeMinutes: 0, isLate: false, isWeeklyOff: true
+      sessions: [],
+      totalDurationMinutes: 0,
+      lateMinutes: 0,
+      overtimeMinutes: 0,
+      isLate: false,
+      isWeeklyOff: true
     };
   }
 
   return {
     date,
     status: 'ABSENT',
-    checkIn: null, checkOut: null, durationMinutes: 0, lateMinutes: 0, overtimeMinutes: 0, isLate: false, isWeeklyOff: false
+    sessions: [],
+    totalDurationMinutes: 0,
+    lateMinutes: 0,
+    overtimeMinutes: 0,
+    isLate: false,
+    isWeeklyOff: false
   };
 }
 
@@ -156,8 +190,8 @@ export function calculateAttendanceSummaries(
       case 'MISSING_CHECK_OUT':
         lifetime.total_present_days++;
         m.present_days++;
-        lifetime.total_hours_worked += statusData.durationMinutes / 60;
-        m.total_hours += statusData.durationMinutes / 60;
+        lifetime.total_hours_worked += statusData.totalDurationMinutes / 60;
+        m.total_hours += statusData.totalDurationMinutes / 60;
         lifetime.total_overtime += statusData.overtimeMinutes / 60;
         m.overtime += statusData.overtimeMinutes / 60;
         if (statusData.isLate) {

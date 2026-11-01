@@ -3,12 +3,13 @@
 -- Implements strict timeline-based weekly-off configuration with exclusive bounds.
 -- ============================================================================
 
--- 1. Fix the Overlap Constraint to use exclusive upper bounds [)
--- This ensures a rule ending on 2026-06-30 and another starting on 2026-06-30 do not overlap.
+-- 1. Fix the Overlap Constraint to allow multiple different days of the week
+-- Now it only prevents overlaps for the SAME day of the week for a single employee.
 alter table weekly_off_schedules drop constraint if exists excl_weekly_off_overlap;
 
 alter table weekly_off_schedules add constraint excl_weekly_off_overlap exclude using gist (
   employee_id with =,
+  day_of_week with =,
   daterange(effective_from, coalesce(effective_until, 'infinity'::date), '[)') with &&
 );
 
@@ -35,13 +36,15 @@ begin
   update weekly_off_schedules
   set effective_until = p_effective_from
   where employee_id = p_employee_id
+    and day_of_week = p_day_of_week
     and effective_from < p_effective_from
     and (effective_until is null or effective_until > p_effective_from);
 
   -- B. Remove all rules that start at or after the start date
-  -- Since the new rule is open-ended, it supersedes all future configurations
+  -- Since the new rule is open-ended, it supersedes all future configurations for this specific day
   delete from weekly_off_schedules
   where employee_id = p_employee_id
+    and day_of_week = p_day_of_week
     and effective_from >= p_effective_from;
 
   -- C. Insert the new rule

@@ -148,9 +148,12 @@ export async function buildMonthlyReportData(employeeId: string, month: number, 
         break;
     }
 
-    const checkIn = statusData.checkIn ? new Date(statusData.checkIn).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Dhaka' }) : null;
-    const checkOut = statusData.checkOut ? new Date(statusData.checkOut).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Dhaka' }) : null;
-    const duration = statusData.durationMinutes > 0 ? `${statusData.durationMinutes}m` : null;
+    const firstSession = statusData.sessions[0];
+    const lastSession = statusData.sessions[statusData.sessions.length - 1];
+
+    const checkIn = firstSession?.checkIn ? new Date(firstSession.checkIn).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Dhaka' }) : null;
+    const checkOut = lastSession?.checkOut ? new Date(lastSession.checkOut).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Dhaka' }) : null;
+    const duration = statusData.totalDurationMinutes > 0 ? `${statusData.totalDurationMinutes}m` : null;
 
     const attendanceRecord = attendanceData.find(a => a.attendance_date === dateStr);
     const reason = attendanceRecord?.notes || null;
@@ -160,7 +163,7 @@ export async function buildMonthlyReportData(employeeId: string, month: number, 
       presentDays++;
       totalLateMinutes += statusData.lateMinutes;
       totalOvertime += statusData.overtimeMinutes;
-      totalWorkingMinutes += statusData.durationMinutes;
+      totalWorkingMinutes += statusData.totalDurationMinutes;
     } else if (statusData.status === 'PAID_LEAVE') {
       paidLeaveDays++;
     } else if (statusData.status === 'UNPAID_LEAVE') {

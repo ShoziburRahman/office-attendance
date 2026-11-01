@@ -259,9 +259,26 @@ export function EmployeeProfileView({
                                       return (
                                         <tr key={dateStr} className="hover:bg-white transition-colors">
                                           <td className="py-3 text-ink-900 font-medium">{dateStr}</td>
-                                          <td className="py-3 text-ink-600">{statusData.checkIn ? format(new Date(statusData.checkIn), "p") : '—'}</td>
-                                          <td className="py-3 text-ink-600">{statusData.checkOut ? format(new Date(statusData.checkOut), "p") : '...'}</td>
-                                          <td className="py-3 text-ink-600">{statusData.durationMinutes ? `${Math.floor(statusData.durationMinutes / 60)}h ${statusData.durationMinutes % 60}m` : '—'}</td>
+                                          <td className="py-3 text-ink-600">
+                                            {statusData.sessions.map((s, i) => (
+                                              <div key={i} className="flex items-center gap-1">
+                                                {s.checkIn ? format(new Date(s.checkIn), "p") : '—'}
+                                                {i < statusData.sessions.length - 1 && <span className="text-ink-300 text-[10px]"> | </span>}
+                                              </div>
+                                            ))}
+                                            {statusData.sessions.length === 0 && '—'}
+                                          </td>
+                                          <td className="py-3 text-ink-600">
+                                            {statusData.sessions.map((s, i) => (
+                                                                             <div key={i} className="flex items-center gap-1">
+                                                {s.checkOut ? format(new Date(s.checkOut), "p") : '...'}
+                                                {i < statusData.sessions.length - 1 && <span className="text-ink-300 text-[10px]"> | </span>}
+                                              </div>
+                                            //)).join('') || '—'}
+                                            ))}
+                                            {statusData.sessions.length === 0 && '—'}
+                                          </td>
+                                          <td className="py-3 text-ink-600">{statusData.totalDurationMinutes ? `${Math.floor(statusData.totalDurationMinutes / 60)}h ${statusData.totalDurationMinutes % 60}m` : '—'}</td>
                                           <td className="py-3">
                                             <Badge tone={getStatusTone(statusData.status)}>
                                               {statusData.status === 'PRESENT' ? 'Present' : statusData.status === 'MISSING_CHECK_OUT' ? 'Active' : statusData.status}

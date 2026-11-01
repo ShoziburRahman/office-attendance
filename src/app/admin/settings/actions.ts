@@ -15,6 +15,7 @@ export async function updateSettings(formData: FormData): Promise<{ success: boo
   if (formData.get("default_break_minutes")) updates.default_break_minutes = parseInt(formData.get("default_break_minutes") as string);
   if (formData.get("min_minutes_before_checkout")) updates.min_minutes_before_checkout = parseInt(formData.get("min_minutes_before_checkout") as string);
   if (formData.get("max_session_minutes")) updates.max_session_minutes = parseInt(formData.get("max_session_minutes") as string);
+  if (formData.get("late_grace_minutes")) updates.late_grace_minutes = parseInt(formData.get("late_grace_minutes") as string);
   if (formData.get("office_latitude")) updates.office_latitude = parseFloat(formData.get("office_latitude") as string);
   if (formData.get("office_longitude")) updates.office_longitude = parseFloat(formData.get("office_longitude") as string);
   if (formData.get("allowed_radius")) updates.allowed_radius = parseInt(formData.get("allowed_radius") as string);

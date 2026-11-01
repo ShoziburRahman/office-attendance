@@ -30,14 +30,15 @@ export function ActivateToggleButton({
   return (
     <div className="flex flex-col items-end gap-1">
       <Button
-        variant={isActive ? "danger" : "primary"}
-        size="md"
+        variant={isActive ? "secondary" : "primary"}
+        size="sm"
+        className={`h-8 px-2 text-xs ${isActive ? "text-status-late border-status-late hover:bg-red-50" : ""}`}
         onClick={(e) => handleClick(e)}
         isLoading={isPending}
       >
-        {isActive ? "Deactivate employee" : "Reactivate employee"}
+        {isActive ? "Deactivate" : "Reactivate"}
       </Button>
-      {error && <p className="text-xs text-status-late">{error}</p>}
+      {error && <p className="text-[10px] text-status-late">{error}</p>}
     </div>
   );
 }

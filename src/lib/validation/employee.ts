@@ -21,7 +21,7 @@ export interface ScheduleInput {
 }
 
 export interface WeeklyOffInput {
-  dayOfWeek: string;
+  dayOfWeek: string[];
   effectiveFrom: string;
 }
 
@@ -106,9 +106,16 @@ export function validateSchedule(input: ScheduleInput): ScheduleErrors {
 export function validateWeeklyOff(input: WeeklyOffInput): WeeklyOffErrors {
   const errors: WeeklyOffErrors = {};
 
-  const day = parseInt(input.dayOfWeek);
-  if (isNaN(day) || day < 0 || day > 6) {
-    errors.dayOfWeek = "Select a valid day of the week.";
+  if (!input.dayOfWeek || input.dayOfWeek.length === 0) {
+    errors.dayOfWeek = "Select at least one day of the week.";
+  } else {
+    for (const dayStr of input.dayOfWeek) {
+      const day = parseInt(dayStr);
+      if (isNaN(day) || day < 0 || day > 6) {
+        errors.dayOfWeek = "Select valid days of the week.";
+        break;
+      }
+    }
   }
   if (!input.effectiveFrom || Number.isNaN(Date.parse(input.effectiveFrom))) {
     errors.effectiveFrom = "A valid effective date is required.";
