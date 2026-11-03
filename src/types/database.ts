@@ -113,11 +113,24 @@ export interface WeeklyOffScheduleRow {
   created_at: string;
 }
 
+export interface LeaveTypeRow {
+  id: string;
+  name: string;
+  is_paid: boolean;
+  deducts_annual_balance: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface EmployeeLeaveRow {
   id: string;
   employee_id: string;
   leave_date: string;
   leave_type: LeaveType;
+  leave_type_id: string | null;
+  snapshot_is_paid: boolean | null;
+  snapshot_deducts_balance: boolean | null;
   reason: string | null;
   notes: string | null;
   worked_on_leave: boolean;
@@ -231,6 +244,30 @@ export interface SalaryCalculationRow {
   updated_by: string | null;
 }
 
+export interface AutomaticOtCreditRow {
+  id: string;
+  employee_id: string;
+  month: number;
+  year: number;
+  entitlement: number;
+  actual_offs: number;
+  ot_credit_days: number;
+  excess_offs: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LeaveAuditLogRow {
+  id: string;
+  employee_id: string;
+  leave_date: string;
+  leave_type: string | null;
+  deleted_by: string;
+  deleted_at: string;
+  reason: string | null;
+  created_at: string;
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -260,8 +297,7 @@ export interface Database {
       };
       employee_leaves: {
         Row: EmployeeLeaveRow;
-        Insert: Partial<EmployeeLeaveRow> &
-          Pick<EmployeeLeaveRow, "employee_id" | "leave_date" | "leave_type" | "created_by">;
+        Insert: Partial<EmployeeLeaveRow>;
         Update: Partial<EmployeeLeaveRow>;
       };
       attendance: {
@@ -293,6 +329,16 @@ export interface Database {
         Row: SalaryCalculationRow;
         Insert: Partial<SalaryCalculationRow>;
         Update: Partial<SalaryCalculationRow>;
+      },
+      automatic_ot_credits: {
+        Row: AutomaticOtCreditRow;
+        Insert: Partial<AutomaticOtCreditRow>;
+        Update: Partial<AutomaticOtCreditRow>;
+      },
+      leave_types: {
+        Row: LeaveTypeRow;
+        Insert: Partial<LeaveTypeRow>;
+        Update: Partial<LeaveTypeRow>;
       },
     };
     Functions: {

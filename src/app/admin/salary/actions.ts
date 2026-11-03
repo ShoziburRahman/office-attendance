@@ -61,6 +61,8 @@ export async function getEmployeesList() {
   }));
 }
 
+import { AutomaticOtCreditRow } from "@/types/database";
+
 export async function loadSalaryData(employeeId: string, month: number, year: number) {
   const currentUser = await requireUser();
   if (currentUser.profile.role !== "ADMIN") {
@@ -69,8 +71,8 @@ export async function loadSalaryData(employeeId: string, month: number, year: nu
 
   const supabase = await createClient();
 
-  // Calculate actual calendar days in the selected month/year
-  const salaryDays = new Date(year, month, 0).getDate();
+  // Lock salary days to 30 for all months
+  const salaryDays = 30;
 
   // 1. Fetch employee name and base salary
   const { data: empInfo } = await supabase
@@ -100,7 +102,21 @@ export async function loadSalaryData(employeeId: string, month: number, year: nu
   const reportData = await buildMonthlyReportData(employeeId, month, year);
 
   // Convert overtime minutes to hours
-  const overtimeHours = parseFloat((reportData.summary.totalOvertimeMinutes / 60).toFixed(2));
+  let overtimeHours = parseFloat((reportData.summary.totalOvertimeMinutes / 60).toFixed(2));
+
+  // Incorporate Automatic OT Credits
+  const { data: otCredit } = await supabase
+    .from("automatic_ot_credits")
+    .select("ot_credit_days")
+    .eq("employee_id", employeeId)
+    .eq("month", month)
+    .eq("year", year)
+    .single();
+
+  if (otCredit) {
+    // Each OT credit day is 8 hours
+    overtimeHours += (otCredit as AutomaticOtCreditRow).ot_credit_days * 8;
+  }
 
   const baseline: SalaryDataPayload = {
     employeeId,

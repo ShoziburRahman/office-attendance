@@ -29,12 +29,12 @@ export async function calculatePaidLeaveStatus(employeeId: string, year: number)
   const limit = settings?.annual_paid_leave_limit ?? 10;
 
   // 2. Count paid leaves for the given year
-  // We filter by leave_type = 'PAID' and leave_counted = true.
+  // We filter by snapshot_deducts_balance = true and leave_counted = true.
   const { count, error: countError } = await supabase
     .from("employee_leaves")
     .select("*", { count: "exact", head: true })
     .eq("employee_id", employeeId)
-    .eq("leave_type", "PAID")
+    .eq("snapshot_deducts_balance", true)
     .eq("leave_counted", true)
     .gte("leave_date", `${year}-01-01`)
     .lte("leave_date", `${year}-12-31`);

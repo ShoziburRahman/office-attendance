@@ -1,6 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { LeaveGroupedList } from "@/components/admin/LeaveGroupedList";
+import { Button } from "@/components/ui/Button";
+import { BulkLeaveAssignmentModal } from "@/components/admin/BulkLeaveAssignmentModal";
+import { LeaveTypeManager } from "@/components/admin/LeaveTypeManager";
 
 export default async function LeavePage() {
   const supabase = await createClient();
@@ -26,7 +29,8 @@ export default async function LeavePage() {
       employee:employees!employee_leaves_employee_id_fkey(
         *,
         profile:profiles!employees_id_fkey(*)
-      )
+      ),
+      leave_type:leave_types!employee_leaves_leave_type_id_fkey(*)
     `)
     .order("leave_date", { ascending: false })
     .returns<any[]>();
@@ -82,9 +86,13 @@ export default async function LeavePage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div>
+        <div className="space-y-1">
           <h1 className="text-lg font-semibold text-ink-900">Leave Management</h1>
           <p className="mt-1 text-sm text-ink-400">Global overview of all employee leaves</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <BulkLeaveAssignmentModal />
+          <LeaveTypeManager />
         </div>
       </div>
 

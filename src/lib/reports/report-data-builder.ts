@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { calculateDailyStatus } from "@/lib/attendance-utils";
+import { calculateDailyStatus, countFridaysInMonth, isEligibleForWeekendEntitlement } from "@/lib/attendance-utils";
 import type { AttendanceRow, EmployeeLeaveRow, WeeklyOffScheduleRow } from "@/types/database";
 
 export interface MonthlyReportData {
@@ -24,6 +24,9 @@ export interface MonthlyReportData {
     totalLateMinutes: number;
     totalOvertimeMinutes: number;
     totalWorkingHours: number;
+    entitlementAdjustmentOT: number;
+    entitlementAdjustmentUnpaid: number;
+    weekendEntitlement: number;
   };
   dailyDetails: Array<{
     date: string;
@@ -195,6 +198,35 @@ export async function buildMonthlyReportData(employeeId: string, month: number, 
     });
   }
 
+  // Post-processing for Weekend Entitlement
+  let entitlementAdjustmentOT = 0;
+  let entitlementAdjustmentUnpaid = 0;
+  const weekendEntitlement = countFridaysInMonth(month, year);
+  const isEligible = isEligibleForWeekendEntitlement(weeklyOffsData);
+
+  if (isEligible) {
+    const diff = weeklyOffCount - weekendEntitlement;
+    if (diff > 0) {
+      entitlementAdjustmentUnpaid = diff;
+    } else if (diff < 0) {
+      entitlementAdjustmentOT = Math.abs(diff);
+    }
+  }
+
+  // Upsert the credit record to database
+  if (isEligible) {
+    await (supabase.from("automatic_ot_credits") as any).upsert({
+      employee_id: employeeId,
+      month,
+      year,
+      entitlement: weekendEntitlement,
+      actual_offs: weeklyOffCount,
+      ot_credit_days: entitlementAdjustmentOT,
+      excess_offs: entitlementAdjustmentUnpaid,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'employee_id,month,year' });
+  }
+
   return {
     employee: {
       full_name: employeeData.profiles.full_name,
@@ -207,13 +239,16 @@ export async function buildMonthlyReportData(employeeId: string, month: number, 
       totalWorkingDays,
       daysWorked,
       presentDays,
-      absentDays,
+      absentDays: absentDays + entitlementAdjustmentUnpaid,
       paidLeaveDays,
-      unpaidLeaveDays,
+      unpaidLeaveDays: unpaidLeaveDays + entitlementAdjustmentUnpaid,
       weeklyOffs: weeklyOffCount,
       totalLateMinutes,
       totalOvertimeMinutes: totalOvertime,
       totalWorkingHours: Math.floor(totalWorkingMinutes / 60),
+      entitlementAdjustmentOT,
+      entitlementAdjustmentUnpaid,
+      weekendEntitlement,
     },
     dailyDetails,
   };

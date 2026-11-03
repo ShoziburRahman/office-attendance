@@ -44,6 +44,21 @@ export interface DailyStatus {
   isWeeklyOff: boolean;
 }
 
+export function countFridaysInMonth(month: number, year: number): number {
+  let count = 0;
+  const date = new Date(year, month - 1, 1);
+  while (date.getMonth() === month - 1) {
+    if (date.getDay() === 5) count++; // 5 = Friday
+    date.setDate(date.getDate() + 1);
+  }
+  return count;
+}
+
+export function isEligibleForWeekendEntitlement(weeklyOffs: WeeklyOffScheduleRow[]): boolean {
+  // Eligible if employee has exactly one active weekly off configuration
+  return weeklyOffs.length === 1;
+}
+
 export function calculateDailyStatus(
   date: string,
   employeeId: string,
@@ -105,7 +120,7 @@ export function calculateDailyStatus(
   if (dayLeave) {
     return {
       date,
-      status: dayLeave.leave_type === 'PAID' ? 'PAID_LEAVE' : 'UNPAID_LEAVE',
+      status: dayLeave.snapshot_is_paid === true ? 'PAID_LEAVE' : 'UNPAID_LEAVE',
       sessions: [],
       totalDurationMinutes: 0,
       lateMinutes: 0,

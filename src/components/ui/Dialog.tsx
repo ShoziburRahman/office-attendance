@@ -13,9 +13,10 @@ interface DialogProps {
   onClose: () => void;
   title?: string;
   children: React.ReactNode;
+  className?: string;
 }
 
-export function Dialog({ isOpen, onClose, title, children }: DialogProps) {
+export function Dialog({ isOpen, onClose, title, children, className }: DialogProps) {
   // Close on escape key
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
@@ -36,7 +37,10 @@ export function Dialog({ isOpen, onClose, title, children }: DialogProps) {
       />
 
       {/* Modal Content */}
-      <div className="relative w-full max-w-md overflow-hidden rounded-lg bg-white shadow-xl animate-in zoom-in-95 duration-200">
+      <div className={cn(
+        "relative overflow-hidden rounded-lg bg-white shadow-xl animate-in zoom-in-95 duration-200",
+        className || "w-full max-w-md"
+      )}>
         {title && (
           <div className="border-b border-ink-100 px-6 py-4">
             <h3 className="text-lg font-semibold text-ink-900">{title}</h3>

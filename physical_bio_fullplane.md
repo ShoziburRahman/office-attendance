@@ -8,12 +8,15 @@ For a professional yet cost-effective setup, I recommend **ZKTeco** devices. The
 
 ### Suggested Models:
 - **Entry Level: ZKTeco K40**
+    - *Price:* 6700 taka.
     - *Features:* TCP/IP, USB Host, Fingerprint.
     - *Best for:* Small offices (under 50 employees).
 - **Mid-Range: ZKTeco iClock 680**
+    - *Price:* 13200 taka.
     - *Features:* Fingerprint, RFID Card, TCP/IP, Push Technology.
     - *Best for:* Medium offices with higher traffic.
 - **Advanced: ZKTeco uFace 800**
+    - *Price:* 30000 taka.
     - *Features:* Face Recognition, Fingerprint, RFID, TCP/IP.
     - *Best for:* High-security needs or touchless attendance.
 
